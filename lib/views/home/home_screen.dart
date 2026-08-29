@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_members.dart';
 import '../../models/financial_record.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
@@ -20,6 +21,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final StorageService _storageService = StorageService();
   final ScrollController _scrollController = ScrollController();
+
+  // Usuario / Rol activo en el dispositivo (por defecto Administrador)
+  FamilyMember _currentMember = AppMembers.members.first;
 
   // Paginación y filtros
   int _currentLimit = 15;
@@ -57,21 +61,149 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showMemberSelectorDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Seleccionar Perfil Activo',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Define quién está usando este dispositivo en la familia:',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              ...AppMembers.members.map((member) {
+                final isSelected = member.id == _currentMember.id;
+                return ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: member.color.withAlpha(30),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(member.icon, color: member.color, size: 20),
+                  ),
+                  title: Row(
+                    children: [
+                      Text(
+                        member.name,
+                        style: TextStyle(
+                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (member.isAdmin)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withAlpha(30),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'ADMIN',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  subtitle: Text(
+                    member.role,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle_rounded, color: AppColors.primary)
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _currentMember = member;
+                    });
+                    Navigator.pop(ctx);
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary, size: 24),
-            SizedBox(width: 10),
-            Text('Auditoría Familiar'),
+            const Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary, size: 22),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Auditoría Familiar',
+                style: TextStyle(fontSize: 18),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
+          // Selector rápido de perfil activo
+          InkWell(
+            onTap: _showMemberSelectorDialog,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: _currentMember.color.withAlpha(25),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _currentMember.color.withAlpha(60)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_currentMember.icon, size: 15, color: _currentMember.color),
+                  const SizedBox(width: 4),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 80),
+                    child: Text(
+                      _currentMember.name.split(' ').first,
+                      style: TextStyle(
+                        color: _currentMember.color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Restablecer paginación',
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+            tooltip: 'Sincronizar',
             onPressed: () {
               setState(() {
                 _currentLimit = 15;
@@ -84,6 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: CustomScrollView(
@@ -115,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTypeSelected: (type) {
                 setState(() {
                   _selectedType = type;
-                  _currentLimit = 15; // Resetear límite al cambiar de filtro
+                  _currentLimit = 15;
                 });
               },
             ),
@@ -137,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   Text(
-                    'Límite: $_currentLimit',
+                    'Mostrando $_currentLimit',
                     style: const TextStyle(
                       color: AppColors.textMuted,
                       fontSize: 12,
@@ -288,6 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
         record: record,
         firestoreService: _firestoreService,
         storageService: _storageService,
+        currentUserId: _currentMember.id,
       ),
     );
   }
