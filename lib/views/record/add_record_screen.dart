@@ -127,7 +127,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
       String? imageUrl;
       String? storagePath;
 
-      // 1. Subir imagen a Firebase Storage si fue adjuntada
+      // 1. Subir imagen comprimida
       if (_selectedImage != null) {
         final uploadResult = await _storageService.uploadReceiptImage(
           imageFile: _selectedImage!,
@@ -205,21 +205,21 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
           : Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 children: [
                   // 1. Selector de Tipo (Ingreso / Egreso)
                   TransactionTypeToggle(
                     selectedType: _selectedType,
                     onChanged: _onTypeChanged,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
 
                   // 2. Campo de Monto ($)
                   TextFormField(
                     controller: _amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 26,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
@@ -228,7 +228,11 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                       prefixIcon: const Icon(Icons.attach_money_rounded, size: 28),
                       hintText: '0.00',
                       suffixText: 'USD',
-                      suffixStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMuted),
+                      suffixStyle: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textMuted,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) {
@@ -241,7 +245,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // 3. Título / Concepto
                   TextFormField(
@@ -250,6 +254,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                       labelText: 'Concepto / Título *',
                       hintText: 'Ej. Compra semanal en supermercado',
                       prefixIcon: Icon(Icons.edit_note_rounded),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) {
@@ -258,7 +263,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // 4. Selector de Categoría
                   const Text(
@@ -279,13 +284,14 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                       });
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
-                  // 5. Selector de Fecha y Responsable
+                  // 5. Selector de Fecha y Responsable (Diseño Responsivo)
                   Row(
                     children: [
                       // Fecha
                       Expanded(
+                        flex: 5,
                         child: InkWell(
                           onTap: _selectDate,
                           borderRadius: BorderRadius.circular(12),
@@ -293,28 +299,34 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Fecha',
                               prefixIcon: Icon(Icons.calendar_today_rounded, size: 18),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                             ),
                             child: Text(
                               DateFormat('dd/MM/yyyy').format(_selectedDate),
-                              style: const TextStyle(fontSize: 14),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       // Registrado por
                       Expanded(
+                        flex: 5,
                         child: TextFormField(
                           controller: _registeredByController,
+                          style: const TextStyle(fontSize: 13),
                           decoration: const InputDecoration(
                             labelText: 'Miembro / Autor',
                             prefixIcon: Icon(Icons.person_rounded, size: 18),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // 6. Comprobante fotográfico con compresión
                   const Text(
@@ -333,19 +345,20 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                     onImageSelected: _handleImageSelected,
                     onRemoveImage: _handleRemoveImage,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // 7. Notas adicionales / Descripción
                   TextFormField(
                     controller: _descriptionController,
-                    maxLines: 3,
+                    maxLines: 2,
                     decoration: const InputDecoration(
                       labelText: 'Notas adicionales (Opcional)',
                       hintText: 'Detalles de la auditoría, observaciones...',
                       alignLabelWithHint: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
                   // 8. Botón de Guardado
                   ElevatedButton.icon(
@@ -386,7 +399,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
             const SizedBox(height: 8),
             if (_selectedImage != null) ...[
               Text(
-                'Subiendo comprobante comprimido: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                'Subiendo comprobante optimizado: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
                 style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 12),

@@ -37,17 +37,18 @@ class RecordTile extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                // Icono de Categoría o Miniatura de Comprobante
+                // 1. Icono de Categoría o Miniatura de Comprobante
                 _buildLeadingImageOrIcon(category),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
 
-                // Información Principal (Título, Categoría, Fecha)
+                // 2. Información Principal (Título, Categoría, Fecha)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         record.title,
@@ -59,8 +60,11 @@ class RecordTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Row(
+                      const SizedBox(height: 5),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -78,9 +82,10 @@ class RecordTile extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 8),
                           Text(
                             DateFormatter.formatShort(record.date),
                             style: const TextStyle(
@@ -94,9 +99,12 @@ class RecordTile extends StatelessWidget {
                   ),
                 ),
 
-                // Monto e Indicador de Comprobante
+                const SizedBox(width: 8),
+
+                // 3. Monto e Indicador de Comprobante
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       '$sign${CurrencyFormatter.format(record.amount)}',
@@ -134,6 +142,8 @@ class RecordTile extends StatelessWidget {
                           color: AppColors.textMuted,
                           fontSize: 10,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                   ],
                 ),
@@ -155,8 +165,8 @@ class RecordTile extends StatelessWidget {
           return ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: SizedBox(
-              width: 48,
-              height: 48,
+              width: 46,
+              height: 46,
               child: Image.memory(bytes, fit: BoxFit.cover),
             ),
           );
@@ -166,8 +176,8 @@ class RecordTile extends StatelessWidget {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: SizedBox(
-          width: 48,
-          height: 48,
+          width: 46,
+          height: 46,
           child: CachedNetworkImage(
             imageUrl: img,
             fit: BoxFit.cover,
@@ -186,7 +196,7 @@ class RecordTile extends StatelessWidget {
             ),
             errorWidget: (context, url, error) => Container(
               color: category.color.withAlpha(30),
-              child: Icon(category.icon, color: category.color, size: 24),
+              child: Icon(category.icon, color: category.color, size: 22),
             ),
           ),
         ),
@@ -194,8 +204,8 @@ class RecordTile extends StatelessWidget {
     }
 
     return Container(
-      width: 48,
-      height: 48,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         color: category.color.withAlpha(25),
         borderRadius: BorderRadius.circular(12),
@@ -204,7 +214,7 @@ class RecordTile extends StatelessWidget {
           width: 1,
         ),
       ),
-      child: Icon(category.icon, color: category.color, size: 24),
+      child: Icon(category.icon, color: category.color, size: 22),
     );
   }
 }

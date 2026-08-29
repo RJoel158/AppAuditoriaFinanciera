@@ -26,31 +26,39 @@ class FirestoreService {
     }
   }
 
-  /// Stream en tiempo real con límite configurable (por defecto 15 para optimizar lectura)
+  /// Stream en tiempo real con límite configurable y filtrado en memoria
+  /// (Evita requerir índices compuestos en la consola de Firebase)
   Stream<List<FinancialRecord>> getRecordsStream({
     int limit = 15,
     RecordType? filterType,
     String? filterCategory,
   }) {
-    Query<Map<String, dynamic>> query = _recordsCollection
-        .orderBy('date', descending: true);
-
-    if (filterType != null) {
-      query = query.where('type', isEqualTo: filterType.key);
-    }
-
-    if (filterCategory != null && filterCategory.isNotEmpty) {
-      query = query.where('category', isEqualTo: filterCategory);
-    }
-
-    query = query.limit(limit);
+    // Consultamos ordenado por fecha de forma simple
+    final query = _recordsCollection
+        .orderBy('date', descending: true)
+        .limit(limit * 3);
 
     return query.snapshots(includeMetadataChanges: true).map((snapshot) {
-      return snapshot.docs.map((doc) => FinancialRecord.fromSnapshot(doc)).toList();
+      var list = snapshot.docs.map((doc) => FinancialRecord.fromSnapshot(doc)).toList();
+
+      // Filtrado limpio en cliente
+      if (filterType != null) {
+        list = list.where((r) => r.type == filterType).toList();
+      }
+
+      if (filterCategory != null && filterCategory.isNotEmpty) {
+        list = list.where((r) => r.category == filterCategory).toList();
+      }
+
+      if (list.length > limit) {
+        list = list.sublist(0, limit);
+      }
+
+      return list;
     });
   }
 
-  /// Stream para calcular métricas en tiempo real de todos los registros del mes/año
+  /// Stream para calcular métricas en tiempo real de todos los registros
   Stream<Map<String, double>> getSummaryStream() {
     return _recordsCollection.snapshots().map((snapshot) {
       double totalIncome = 0.0;

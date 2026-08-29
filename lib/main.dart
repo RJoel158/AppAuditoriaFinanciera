@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'services/firestore_service.dart';
@@ -7,6 +8,9 @@ import 'views/home/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 0. Inicializar soporte de idioma español para fechas (intl)
+  await initializeDateFormatting('es', null);
 
   // 1. Inicialización de Firebase
   try {
