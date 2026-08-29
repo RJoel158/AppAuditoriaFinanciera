@@ -1,10 +1,10 @@
-# 💰 App de Auditoría y Ahorro Financiero Familiar en Tiempo Real
+#  App de Auditoría y Ahorro Financiero Familiar en Tiempo Real
 
 Aplicación móvil y multiplataforma en **Flutter** para auditar y controlar en tiempo real los ingresos y gastos familiares compartidos entre múltiples dispositivos, con adjuntos fotográficos de comprobantes en **Firebase Storage** y persistencia offline en **Cloud Firestore**.
 
 ---
 
-## ⚡ Comandos para Instalar y Ejecutar
+##  Comandos para Instalar y Ejecutar
 
 ### 1. Instalar las dependencias del proyecto
 Abre tu terminal en la raíz del proyecto y ejecuta:
@@ -36,7 +36,7 @@ flutter run
 
 ---
 
-## 🔒 Reglas de Seguridad de Firebase
+##  Reglas de Seguridad de Firebase
 
 ### 1. Cloud Firestore (`firestore.rules`)
 Ve a **Firebase Console > Firestore Database > Reglas** y pega lo siguiente:
@@ -70,7 +70,7 @@ service firebase.storage {
 
 ---
 
-## 📱 Permisos del Sistema (Cámara y Galería)
+##  Permisos del Sistema (Cámara y Galería)
 
 ### Android (`android/app/src/main/AndroidManifest.xml`)
 Asegúrate de tener estos permisos dentro de `<manifest>`:
@@ -94,7 +94,7 @@ Agrega las claves de descripción para la cámara y la galería:
 
 ---
 
-## 🌟 Características Implementadas
+##  Características Implementadas
 
 | Requisito | Implementación |
 | :--- | :--- |
