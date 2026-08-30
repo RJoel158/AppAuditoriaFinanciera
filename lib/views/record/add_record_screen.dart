@@ -8,6 +8,7 @@ import '../../core/constants/app_members.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/image_compressor.dart';
 import '../../models/financial_record.dart';
+import '../../services/auth_service.dart';
 import '../../services/exchange_rate_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
@@ -31,6 +32,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
   final FirestoreService _firestoreService = FirestoreService();
   final StorageService _storageService = StorageService();
+  final AuthService _authService = AuthService();
 
   RecordType _selectedType = RecordType.expense;
   String _selectedCategory = AppCategories.expenseCategories.first.id;
@@ -51,6 +53,27 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
   void initState() {
     super.initState();
     _loadExchangeRate();
+    _initLoggedInUser();
+  }
+
+  void _initLoggedInUser() {
+    final authUser = _authService.currentUser;
+    if (authUser != null) {
+      final member = AppMembers.members.firstWhere(
+        (m) => m.id == authUser.id || m.name.toLowerCase().contains(authUser.alias),
+        orElse: () => FamilyMember(
+          id: authUser.id,
+          name: authUser.displayName,
+          role: authUser.role.label,
+          icon: authUser.isAdmin ? Icons.admin_panel_settings_rounded : Icons.person_rounded,
+          color: authUser.isAdmin ? AppColors.primary : const Color(0xFF8B5CF6),
+          isAdmin: authUser.isAdmin,
+        ),
+      );
+      setState(() {
+        _selectedMember = member;
+      });
+    }
   }
 
   Future<void> _loadExchangeRate() async {
@@ -136,9 +159,71 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     }
   }
 
-  Future<void> _submitForm() async {
+  final DuplicateCheckerService _duplicateChecker = DuplicateCheckerService();
+
+  Future<void> _submitForm({bool forceSave = false}) async {
     if (!_formKey.currentState!.validate()) {
       return;
+    }
+
+    final enteredAmount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
+    final amountInBob = _selectedCurrency == 'USD'
+        ? CurrencyFormatter.usdToBob(enteredAmount, rate: _exchangeRate)
+        : enteredAmount;
+
+    // Validación Heurística de Duplicados (si no es guardado forzado)
+    if (!forceSave) {
+      final duplicate = await _duplicateChecker.checkPotentialDuplicate(
+        amount: amountInBob,
+        category: _selectedCategory,
+        type: _selectedType,
+        date: _selectedDate,
+      );
+
+      if (duplicate != null && mounted) {
+        final categoryItem = AppCategories.getCategoryById(_selectedCategory);
+        final diffMinutes = _selectedDate.difference(duplicate.date).inMinutes.abs();
+        final timeText = diffMinutes == 0 ? 'hace unos momentos' : 'hace $diffMinutes min';
+
+        final shouldProceed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: AppColors.accent, size: 26),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Posible Registro Duplicado',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Existe un ${_selectedType.label.toLowerCase()} similar de Bs ${amountInBob.toStringAsFixed(2)} en "${categoryItem.name}" registrado $timeText por ${duplicate.registeredBy}.\n\n¿Deseas guardarlo de todos modos?',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Guardar de todos modos', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldProceed != true) {
+          return;
+        }
+      }
     }
 
     setState(() {
@@ -166,12 +251,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
         storagePath = uploadResult.storagePath;
       }
 
-      // 2. Calcular montos con tipo de cambio
-      final enteredAmount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
-      final amountInBob = _selectedCurrency == 'USD'
-          ? CurrencyFormatter.usdToBob(enteredAmount, rate: _exchangeRate)
-          : enteredAmount;
-
+      // 2. Crear objeto del registro
       final newRecord = FinancialRecord(
         id: '',
         title: _titleController.text.trim(),
@@ -223,10 +303,29 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     }
   }
 
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.expense,
+            content: Text('Error al guardar registro: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final enteredAmount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final convertedAmountBob = CurrencyFormatter.usdToBob(enteredAmount, rate: _exchangeRate);
+    final isAdmin = _authService.currentUser?.isAdmin ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -262,7 +361,6 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                     ),
                     decoration: InputDecoration(
                       labelText: 'Monto de la transacción *',
-                      // Selector elegante BOB / USD integrado
                       prefixIcon: Container(
                         margin: const EdgeInsets.only(left: 8, right: 10, top: 6, bottom: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -331,7 +429,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                     },
                   ),
 
-                  // Caja de conversión responsiva para USD (Sin desbordamientos)
+                  // Caja de conversión responsiva para USD
                   if (_selectedCurrency == 'USD' && enteredAmount > 0) ...[
                     const SizedBox(height: 6),
                     Container(
@@ -421,18 +519,18 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 5. Selector de Miembro Familiar y Fecha
+                  // 5. Miembro Familiar y Fecha (Solo admin puede reasignar)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Selector de Miembro
+                      // Miembro
                       Expanded(
                         flex: 5,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Miembro',
+                              'Registrado por',
                               style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 13,
@@ -440,14 +538,41 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            MemberDropdown(
-                              selectedMemberId: _selectedMember.id,
-                              onMemberChanged: (member) {
-                                setState(() {
-                                  _selectedMember = member;
-                                });
-                              },
-                            ),
+                            if (isAdmin)
+                              MemberDropdown(
+                                selectedMemberId: _selectedMember.id,
+                                onMemberChanged: (member) {
+                                  setState(() {
+                                    _selectedMember = member;
+                                  });
+                                },
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: _selectedMember.color.withAlpha(25),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: _selectedMember.color.withAlpha(60)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(_selectedMember.icon, size: 16, color: _selectedMember.color),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _selectedMember.name,
+                                        style: TextStyle(
+                                          color: _selectedMember.color,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ),

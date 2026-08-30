@@ -33,6 +33,16 @@ dependencies:
   path_provider: ^2.1.5
   uuid: ^4.5.1
   
+  # Gráficos & Visualización
+  fl_chart: ^0.70.2
+
+  # Exportación y generación de PDF local
+  pdf: ^3.11.1
+  printing: ^5.13.2
+
+  # IA Gemini (SDK Oficial de Google)
+  google_generative_ai: ^0.4.6
+
   # Iconos & UI
   cupertino_icons: ^1.0.8
 

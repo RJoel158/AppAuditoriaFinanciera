@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_members.dart';
+import '../../models/family_user.dart';
 import '../../models/financial_record.dart';
+import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
+import '../admin/admin_panel_screen.dart';
+import '../auth/login_screen.dart';
 import '../record/add_record_screen.dart';
 import 'widgets/balance_header.dart';
 import 'widgets/category_filter_bar.dart';
@@ -20,10 +23,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final StorageService _storageService = StorageService();
+  final AuthService _authService = AuthService();
   final ScrollController _scrollController = ScrollController();
-
-  // Usuario / Rol activo en el dispositivo (por defecto Administrador)
-  FamilyMember _currentMember = AppMembers.members.first;
 
   // Paginación y filtros
   int _currentLimit = 15;
@@ -61,97 +62,50 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showMemberSelectorDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Seleccionar Perfil Activo',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Define quién está usando este dispositivo en la familia:',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 14),
-              ...AppMembers.members.map((member) {
-                final isSelected = member.id == _currentMember.id;
-                return ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: member.color.withAlpha(30),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(member.icon, color: member.color, size: 20),
-                  ),
-                  title: Row(
-                    children: [
-                      Text(
-                        member.name,
-                        style: TextStyle(
-                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (member.isAdmin)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withAlpha(30),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'ADMIN',
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  subtitle: Text(
-                    member.role,
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle_rounded, color: AppColors.primary)
-                      : null,
-                  onTap: () {
-                    setState(() {
-                      _currentMember = member;
-                    });
-                    Navigator.pop(ctx);
-                  },
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<void> _handleLogout() async {
+    await _authService.logout();
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
+  }
+
+  IconData _getUserIcon(FamilyUser? user) {
+    if (user == null) return Icons.person_rounded;
+    switch (user.avatarIcon) {
+      case 'admin_panel_settings':
+        return Icons.admin_panel_settings_rounded;
+      case 'favorite':
+        return Icons.favorite_rounded;
+      case 'school':
+        return Icons.school_rounded;
+      default:
+        return Icons.person_rounded;
+    }
+  }
+
+  Color _getUserColor(FamilyUser? user) {
+    if (user == null) return AppColors.primary;
+    if (user.isAdmin) return AppColors.primary;
+    switch (user.avatarIcon) {
+      case 'favorite':
+        return const Color(0xFFEC4899);
+      case 'school':
+        return const Color(0xFF38BDF8);
+      default:
+        return const Color(0xFF8B5CF6);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = _authService.currentUser;
+    final isAdmin = currentUser?.isAdmin ?? false;
+    final userColor = _getUserColor(currentUser);
+    final userIcon = _getUserIcon(currentUser);
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -168,53 +122,135 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          // Selector rápido de perfil activo
-          InkWell(
-            onTap: _showMemberSelectorDialog,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: _currentMember.color.withAlpha(25),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _currentMember.color.withAlpha(60)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(_currentMember.icon, size: 15, color: _currentMember.color),
+          // 1. Badge Informativo del Usuario Autenticado (Protegido contra cambios sin PIN)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: userColor.withAlpha(25),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: userColor.withAlpha(70)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(userIcon, size: 15, color: userColor),
+                const SizedBox(width: 5),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 80),
+                  child: Text(
+                    currentUser?.displayName.split(' ').first ?? 'Usuario',
+                    style: TextStyle(
+                      color: userColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isAdmin) ...[
                   const SizedBox(width: 4),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 80),
-                    child: Text(
-                      _currentMember.name.split(' ').first,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withAlpha(40),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'ADMIN',
                       style: TextStyle(
-                        color: _currentMember.color,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            tooltip: 'Sincronizar',
-            onPressed: () {
-              setState(() {
-                _currentLimit = 15;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Sincronizando registros en tiempo real...'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
+
+          // 2. Acceso al Panel de Administración (ESTRICTAMENTE SOLO PARA ADMIN)
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primary),
+              tooltip: 'Panel de Administración',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AdminPanelScreen()),
+                );
+              },
+            ),
+
+          // 3. Menú de Opciones
+          PopupMenuButton<String>(
+            color: AppColors.surface,
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (val) {
+              if (val == 'sync') {
+                setState(() {
+                  _currentLimit = 15;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Sincronizando registros en tiempo real...'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              } else if (val == 'admin' && isAdmin) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AdminPanelScreen()),
+                );
+              } else if (val == 'logout') {
+                _handleLogout();
+              }
             },
+            itemBuilder: (ctx) => [
+              if (isAdmin)
+                const PopupMenuItem(
+                  value: 'admin',
+                  child: Row(
+                    children: [
+                      Icon(Icons.admin_panel_settings_rounded, size: 18, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Text('Panel Admin Familiar'),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'sync',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh_rounded, size: 18, color: AppColors.textSecondary),
+                    SizedBox(width: 8),
+                    Text('Sincronizar'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.swap_horiz_rounded, size: 18, color: AppColors.accent),
+                    SizedBox(width: 8),
+                    Text('Cambiar Usuario', style: TextStyle(color: AppColors.accent)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout_rounded, size: 18, color: AppColors.expense),
+                    SizedBox(width: 8),
+                    Text('Cerrar Sesión', style: TextStyle(color: AppColors.expense)),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 4),
         ],
@@ -254,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 3. Título de sección de registros
+          // 3. Título de sección de registros (Sin desbordamientos)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
@@ -284,7 +320,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-
 
           // 4. Lista Reactiva en Tiempo Real con StreamBuilder
           StreamBuilder<List<FinancialRecord>>(
@@ -418,6 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openRecordDetail(FinancialRecord record) {
+    final currentUserId = _authService.currentUser?.id ?? '';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -426,7 +462,7 @@ class _HomeScreenState extends State<HomeScreen> {
         record: record,
         firestoreService: _firestoreService,
         storageService: _storageService,
-        currentUserId: _currentMember.id,
+        currentUserId: currentUserId,
       ),
     );
   }

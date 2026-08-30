@@ -19,15 +19,22 @@ class FamilyMember {
 }
 
 class AppMembers {
-  // Lista de Miembros de la Familia
+  // Lista de Miembros con Administrador separado de Papá
   static const List<FamilyMember> members = [
     FamilyMember(
-      id: 'admin_papa',
-      name: 'Papá / Admin',
+      id: 'admin',
+      name: 'Administrador',
       role: 'Administrador',
       icon: Icons.admin_panel_settings_rounded,
       color: Color(0xFF10B981),
       isAdmin: true,
+    ),
+    FamilyMember(
+      id: 'papa',
+      name: 'Papá',
+      role: 'Familiar',
+      icon: Icons.person_rounded,
+      color: Color(0xFF3B82F6),
     ),
     FamilyMember(
       id: 'mama',
@@ -37,7 +44,7 @@ class AppMembers {
       color: Color(0xFFEC4899),
     ),
     FamilyMember(
-      id: 'hijo_1',
+      id: 'hijo',
       name: 'Hijo / Hija',
       role: 'Familiar',
       icon: Icons.school_rounded,
@@ -47,14 +54,14 @@ class AppMembers {
       id: 'otro_familiar',
       name: 'Otro Familiar',
       role: 'Familiar',
-      icon: Icons.person_rounded,
+      icon: Icons.people_outline_rounded,
       color: Color(0xFF8B5CF6),
     ),
   ];
 
   static FamilyMember getMemberById(String id) {
     return members.firstWhere(
-      (m) => m.id == id || m.name == id,
+      (m) => m.id == id || m.name.toLowerCase() == id.toLowerCase(),
       orElse: () => members.first,
     );
   }

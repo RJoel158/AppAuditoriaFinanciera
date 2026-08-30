@@ -1,5 +1,5 @@
 package com.familia.auditoria.app_auditoria_financiera
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity : FlutterFragmentActivity()
