@@ -114,35 +114,41 @@ class RecordDetailSheet extends StatelessWidget {
                       const SizedBox(width: 8),
 
                       // Monto en Bs + Detalle en USD si aplica
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${isIncome ? '+' : '-'}${CurrencyFormatter.format(record.amount)}',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (record.currency == 'USD')
-                            Container(
-                              margin: const EdgeInsets.only(top: 3),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.accent.withAlpha(25),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            FittedBox(
+                              alignment: Alignment.centerRight,
+                              fit: BoxFit.scaleDown,
                               child: Text(
-                                '\$ ${record.originalAmount.toStringAsFixed(2)} USD',
-                                style: const TextStyle(
-                                  color: AppColors.accent,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                                '${isIncome ? '+' : '-'}${CurrencyFormatter.format(record.amount)}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
-                        ],
+                            if (record.currency == 'USD')
+                              Container(
+                                margin: const EdgeInsets.only(top: 3),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent.withAlpha(25),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '${record.originalAmount.toStringAsFixed(2)} USD',
+                                  style: const TextStyle(
+                                    color: AppColors.accent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

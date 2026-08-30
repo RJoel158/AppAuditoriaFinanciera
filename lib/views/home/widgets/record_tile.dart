@@ -25,7 +25,7 @@ class RecordTile extends StatelessWidget {
     final sign = isIncome ? '+' : '-';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -40,12 +40,13 @@ class RecordTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                // 1. Icono de Categoría o Miniatura de Comprobante
+                // 1. Icono de Categoría o Miniatura de Comprobante (Fijo)
                 _buildLeadingImageOrIcon(category),
                 const SizedBox(width: 12),
 
                 // 2. Información Principal (Título, Categoría, Fecha)
                 Expanded(
+                  flex: 6,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -92,6 +93,8 @@ class RecordTile extends StatelessWidget {
                               color: AppColors.textMuted,
                               fontSize: 11,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -101,51 +104,59 @@ class RecordTile extends StatelessWidget {
 
                 const SizedBox(width: 8),
 
-                // 3. Monto e Indicador de Comprobante
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$sign${CurrencyFormatter.format(record.amount)}',
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
-                      const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.receipt_outlined,
-                            size: 13,
-                            color: AppColors.accent,
+                // 3. Monto e Indicador (Escala responsiva sin aplastar el título)
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FittedBox(
+                        alignment: Alignment.centerRight,
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '$sign${CurrencyFormatter.format(record.amount)}',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
                           ),
-                          SizedBox(width: 3),
-                          Text(
-                            'Comprobante',
-                            style: TextStyle(
-                              color: AppColors.accent,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      Text(
-                        record.registeredBy,
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 10,
+                          maxLines: 1,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                  ],
+                      const SizedBox(height: 4),
+                      if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
+                        const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.receipt_outlined,
+                              size: 13,
+                              color: AppColors.accent,
+                            ),
+                            SizedBox(width: 3),
+                            Text(
+                              'Comprobante',
+                              style: TextStyle(
+                                color: AppColors.accent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          record.registeredBy,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -165,8 +176,8 @@ class RecordTile extends StatelessWidget {
           return ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: SizedBox(
-              width: 46,
-              height: 46,
+              width: 44,
+              height: 44,
               child: Image.memory(bytes, fit: BoxFit.cover),
             ),
           );
@@ -176,8 +187,8 @@ class RecordTile extends StatelessWidget {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: SizedBox(
-          width: 46,
-          height: 46,
+          width: 44,
+          height: 44,
           child: CachedNetworkImage(
             imageUrl: img,
             fit: BoxFit.cover,
@@ -204,8 +215,8 @@ class RecordTile extends StatelessWidget {
     }
 
     return Container(
-      width: 46,
-      height: 46,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
         color: category.color.withAlpha(25),
         borderRadius: BorderRadius.circular(12),

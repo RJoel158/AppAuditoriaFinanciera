@@ -8,6 +8,7 @@ import '../../core/constants/app_members.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/image_compressor.dart';
 import '../../models/financial_record.dart';
+import '../../services/exchange_rate_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
 import 'widgets/category_dropdown.dart';
@@ -38,13 +39,28 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
   // Moneda: 'BOB' (Bolivianos) o 'USD' (Dólares)
   String _selectedCurrency = 'BOB';
-  final double _exchangeRate = CurrencyFormatter.defaultUsdRate; // 6.96
+  double _exchangeRate = ExchangeRateService.fallbackRate; // 10.50
 
   File? _selectedImage;
   CompressionResult? _compressionResult;
   bool _isCompressing = false;
   bool _isSaving = false;
   double _uploadProgress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExchangeRate();
+  }
+
+  Future<void> _loadExchangeRate() async {
+    final rate = await ExchangeRateService.fetchUsdToBobRate();
+    if (mounted) {
+      setState(() {
+        _exchangeRate = rate;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -209,7 +225,6 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Cálculo en vivo de conversión
     final enteredAmount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final convertedAmountBob = CurrencyFormatter.usdToBob(enteredAmount, rate: _exchangeRate);
 
@@ -231,65 +246,77 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   ),
                   const SizedBox(height: 18),
 
-                  // 2. Selector de Moneda (Bolivianos Bs / Dólares USD)
-                  Row(
-                    children: [
-                      const Text(
-                        'Moneda:',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      _buildCurrencyChip(
-                        label: 'Bolivianos (Bs)',
-                        code: 'BOB',
-                        icon: Icons.monetization_on_outlined,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildCurrencyChip(
-                        label: 'Dólares (\$)',
-                        code: 'USD',
-                        icon: Icons.attach_money_rounded,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // 3. Campo de Monto ($) con validación y formateo
+                  // 2. Campo de Monto con Selector Integrado (USD / BOB)
                   TextFormField(
                     controller: _amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
+                      LengthLimitingTextInputFormatter(12),
                       FilteringTextInputFormatter.allow(RegExp(r'^\d+[\.,]?\d{0,2}')),
                     ],
                     onChanged: (_) => setState(() {}),
                     style: const TextStyle(
-                      fontSize: 26,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
                     decoration: InputDecoration(
                       labelText: 'Monto de la transacción *',
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                        child: Text(
-                          _selectedCurrency == 'USD' ? '\$' : 'Bs',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                      // Selector elegante BOB / USD integrado
+                      prefixIcon: Container(
+                        margin: const EdgeInsets.only(left: 8, right: 10, top: 6, bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _selectedCurrency == 'USD'
+                              ? AppColors.accent.withAlpha(25)
+                              : AppColors.primary.withAlpha(25),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _selectedCurrency == 'USD'
+                                ? AppColors.accent.withAlpha(70)
+                                : AppColors.primary.withAlpha(70),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedCurrency,
+                            dropdownColor: AppColors.surface,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'BOB',
+                                child: Text(
+                                  'BOB',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'USD',
+                                child: Text(
+                                  'USD',
+                                  style: TextStyle(
+                                    color: AppColors.accent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedCurrency = val;
+                                });
+                              }
+                            },
                           ),
                         ),
                       ),
                       hintText: '0.00',
-                      suffixText: _selectedCurrency,
-                      suffixStyle: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textMuted,
-                      ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                     validator: (val) {
@@ -304,29 +331,43 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                     },
                   ),
 
-                  // Indicador de conversión en vivo si es USD
+                  // Caja de conversión responsiva para USD (Sin desbordamientos)
                   if (_selectedCurrency == 'USD' && enteredAmount > 0) ...[
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withAlpha(20),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.primary.withAlpha(60)),
+                        color: AppColors.accent.withAlpha(15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.accent.withAlpha(40)),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'T.C. Referencial: 1 USD = $_exchangeRate Bs',
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'T.C. Referencial: 1 USD = ${_exchangeRate.toStringAsFixed(2)} Bs',
+                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              ),
+                              const Text(
+                                'Mercado Actual',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 10),
+                              ),
+                            ],
                           ),
-                          Text(
-                            '≈ Bs ${convertedAmountBob.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: AppColors.primaryLight,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                          const SizedBox(height: 4),
+                          FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '≈ Bs ${NumberFormat("#,##0.00", "es_BO").format(convertedAmountBob)}',
+                              style: const TextStyle(
+                                color: AppColors.accent,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -334,9 +375,9 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                     ),
                   ],
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
 
-                  // 4. Título / Concepto (Con límite de 50 caracteres)
+                  // 3. Título / Concepto (Con límite de 50 caracteres)
                   TextFormField(
                     controller: _titleController,
                     maxLength: 50,
@@ -359,7 +400,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   ),
                   const SizedBox(height: 4),
 
-                  // 5. Selector de Categoría
+                  // 4. Selector de Categoría
                   const Text(
                     'Categoría',
                     style: TextStyle(
@@ -380,7 +421,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 6. Selector de Miembro Familiar y Fecha
+                  // 5. Selector de Miembro Familiar y Fecha
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -459,7 +500,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 7. Comprobante fotográfico con compresión
+                  // 6. Comprobante fotográfico con compresión
                   const Text(
                     'Comprobante o Factura (Opcional)',
                     style: TextStyle(
@@ -478,7 +519,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 8. Notas adicionales / Descripción (Con límite de 250 caracteres)
+                  // 7. Notas adicionales / Descripción (Con límite de 250 caracteres)
                   TextFormField(
                     controller: _descriptionController,
                     maxLength: 250,
@@ -493,7 +534,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // 9. Botón de Guardado
+                  // 8. Botón de Guardado
                   ElevatedButton.icon(
                     onPressed: _submitForm,
                     icon: const Icon(Icons.check_circle_outline_rounded),
@@ -506,48 +547,6 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildCurrencyChip({
-    required String label,
-    required String code,
-    required IconData icon,
-  }) {
-    final isSelected = _selectedCurrency == code;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedCurrency = code;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withAlpha(30) : AppColors.surfaceLight.withAlpha(60),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: isSelected ? AppColors.primary : AppColors.textSecondary),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

@@ -1,8 +1,8 @@
 import 'package:intl/intl.dart';
+import '../../services/exchange_rate_service.dart';
 
 class CurrencyFormatter {
-  // Tipo de cambio referencial USD a Bolivianos (BOB)
-  static const double defaultUsdRate = 6.96;
+  static double get defaultUsdRate => ExchangeRateService.currentRate;
 
   static final NumberFormat _bobFormat = NumberFormat.currency(
     locale: 'es_BO',
@@ -12,7 +12,7 @@ class CurrencyFormatter {
 
   static final NumberFormat _usdFormat = NumberFormat.currency(
     locale: 'en_US',
-    symbol: '\$ ',
+    symbol: 'USD ',
     decimalDigits: 2,
   );
 
@@ -24,24 +24,31 @@ class CurrencyFormatter {
     return _bobFormat.format(amount);
   }
 
-  /// Formatear en Bolivianos compacto (ej. Bs 1.5K, Bs 2.3M)
+  /// Formatear en formato compacto para cifras millonarias
   static String formatCompact(double amount, {String currency = 'BOB'}) {
-    final symbol = currency == 'USD' ? '\$' : 'Bs';
-    if (amount >= 1000000) {
-      return '$symbol ${(amount / 1000000).toStringAsFixed(1)}M';
-    } else if (amount >= 1000) {
-      return '$symbol ${(amount / 1000).toStringAsFixed(1)}K';
+    final symbol = currency == 'USD' ? 'USD' : 'Bs';
+    final absAmount = amount.abs();
+    final sign = amount < 0 ? '-' : '';
+
+    if (absAmount >= 1000000000) {
+      return '$sign$symbol ${(absAmount / 1000000000).toStringAsFixed(2)}B';
+    } else if (absAmount >= 1000000) {
+      return '$sign$symbol ${(absAmount / 1000000).toStringAsFixed(2)}M';
+    } else if (absAmount >= 100000) {
+      return '$sign$symbol ${(absAmount / 1000).toStringAsFixed(1)}K';
     }
-    return '$symbol ${amount.toStringAsFixed(2)}';
+    return format(amount, currency: currency);
   }
 
   /// Convertir USD a BOB
-  static double usdToBob(double usdAmount, {double rate = defaultUsdRate}) {
-    return usdAmount * rate;
+  static double usdToBob(double usdAmount, {double? rate}) {
+    final actualRate = rate ?? ExchangeRateService.currentRate;
+    return usdAmount * actualRate;
   }
 
   /// Convertir BOB a USD
-  static double bobToUsd(double bobAmount, {double rate = defaultUsdRate}) {
-    return rate > 0 ? bobAmount / rate : 0.0;
+  static double bobToUsd(double bobAmount, {double? rate}) {
+    final actualRate = rate ?? ExchangeRateService.currentRate;
+    return actualRate > 0 ? bobAmount / actualRate : 0.0;
   }
 }

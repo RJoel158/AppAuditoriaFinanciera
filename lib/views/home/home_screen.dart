@@ -257,18 +257,22 @@ class _HomeScreenState extends State<HomeScreen> {
           // 3. Título de sección de registros
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 6),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Registros y Comprobantes',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  const Expanded(
+                    child: Text(
+                      'Registros y Comprobantes',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     'Mostrando $_currentLimit',
                     style: const TextStyle(
@@ -280,6 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+
 
           // 4. Lista Reactiva en Tiempo Real con StreamBuilder
           StreamBuilder<List<FinancialRecord>>(

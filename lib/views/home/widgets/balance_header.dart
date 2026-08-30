@@ -86,13 +86,17 @@ class BalanceHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            CurrencyFormatter.format(balance),
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+          FittedBox(
+            alignment: Alignment.centerLeft,
+            fit: BoxFit.scaleDown,
+            child: Text(
+              CurrencyFormatter.format(balance),
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
             ),
           ),
           const SizedBox(height: 20),
