@@ -3,6 +3,7 @@ import 'package:app_auditoria_financiera/main.dart';
 
 void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(const AuditoriaFinancieraApp(initialLoggedIn: false));
+    await tester.pumpWidget(const FamFinanceApp(initialLoggedIn: false));
   });
 }
+

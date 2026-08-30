@@ -66,7 +66,7 @@ class PdfReportService {
 
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Reporte_Auditoria_Familiar_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+      name: 'FamFinance_Reporte_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
     );
   }
 
@@ -84,9 +84,10 @@ class PdfReportService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                'Auditoría Financiera Familiar',
+                'FamFinance - Auditoría Familiar',
                 style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.teal800),
               ),
+
               pw.SizedBox(height: 2),
               pw.Text(
                 'Periodo: $periodLabel',

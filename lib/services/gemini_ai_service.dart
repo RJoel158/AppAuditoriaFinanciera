@@ -1,8 +1,10 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/gemini_config.dart';
 import '../core/constants/app_categories.dart';
 import '../models/chat_message.dart';
 import '../models/financial_record.dart';
+
 
 class FamilyFinancialContext {
   final String userName;
@@ -72,8 +74,11 @@ class GeminiAiService {
   static const String _prefApiKey = 'custom_gemini_api_key';
   static const String _defaultApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
-  /// Obtener API Key guardada en SharedPreferences o por defecto
+  /// Obtener API Key global del proyecto o guardada en SharedPreferences
   static Future<String> getApiKey() async {
+    if (GeminiConfig.apiKey.trim().isNotEmpty) {
+      return GeminiConfig.apiKey.trim();
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString(_prefApiKey);
@@ -83,6 +88,7 @@ class GeminiAiService {
     } catch (_) {}
     return _defaultApiKey;
   }
+
 
   /// Guardar API Key personalizada
   static Future<void> saveApiKey(String apiKey) async {
@@ -121,7 +127,7 @@ $contextSummary
 ''';
 
         final model = GenerativeModel(
-          model: 'gemini-1.5-flash',
+          model: 'gemini-flash-latest',
           apiKey: apiKey,
           generationConfig: GenerationConfig(
             temperature: 0.7, // Respuestas variadas, naturales y creativas
@@ -129,6 +135,7 @@ $contextSummary
           ),
           systemInstruction: Content.system(systemPrompt),
         );
+
 
         // Construir historial multi-turno
         final contents = <Content>[];

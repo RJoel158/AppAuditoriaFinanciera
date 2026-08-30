@@ -209,37 +209,54 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             children: [
               const SizedBox(height: 10),
-              // 1. Encabezado y Logo
+              // 1. Encabezado y Logo Oficial FamFinance
               Container(
-                padding: const EdgeInsets.all(16),
+                width: 76,
+                height: 76,
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withAlpha(25),
+                  color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary.withAlpha(60)),
+                  border: Border.all(color: AppColors.primary, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withAlpha(80),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-                child: const Icon(
-                  Icons.shield_outlined,
-                  color: AppColors.primary,
-                  size: 38,
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: AppColors.primary,
+                      size: 38,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               const Text(
-                'Auditoría Familiar',
+                'FamFinance',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
+                  letterSpacing: 0.5,
                 ),
               ),
               const SizedBox(height: 4),
               const Text(
-                'Selecciona tu perfil e ingresa tu PIN',
+                'Auditoría y Gestión Financiera Familiar',
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
                 ),
               ),
+
               const SizedBox(height: 20),
 
               // 2. Selector de Usuario en COMBOBOX Elegante (Sin chips)

@@ -112,17 +112,27 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary, size: 22),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset(
+                'assets/images/app_logo.png',
+                width: 28,
+                height: 28,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary, size: 22),
+              ),
+            ),
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
-                'Auditoría Familiar',
-                style: TextStyle(fontSize: 18),
+                'FamFinance',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
+
         actions: [
           // 1. Badge Informativo del Usuario Autenticado (Protegido contra cambios sin PIN)
           Container(

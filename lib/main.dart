@@ -32,21 +32,22 @@ void main() async {
   // 4. Verificar si existe sesión activa
   final savedUser = await AuthService().checkSavedSession();
 
-  runApp(AuditoriaFinancieraApp(initialLoggedIn: savedUser != null));
+  runApp(FamFinanceApp(initialLoggedIn: savedUser != null));
 }
 
-class AuditoriaFinancieraApp extends StatelessWidget {
+class FamFinanceApp extends StatelessWidget {
   final bool initialLoggedIn;
 
-  const AuditoriaFinancieraApp({super.key, required this.initialLoggedIn});
+  const FamFinanceApp({super.key, required this.initialLoggedIn});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Auditoría y Ahorro Familiar',
+      title: 'FamFinance',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: initialLoggedIn ? const HomeScreen() : const LoginScreen(),
     );
   }
 }
+
