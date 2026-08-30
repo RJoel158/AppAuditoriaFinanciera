@@ -8,6 +8,7 @@ import '../../models/financial_record.dart';
 import '../../services/firestore_service.dart';
 import '../../services/gemini_ai_service.dart';
 import '../../services/pdf_report_service.dart';
+import '../ai_advisor/financial_advisor_chat_screen.dart';
 
 enum DateRangeFilter {
   thisMonth('Este Mes'),
@@ -401,12 +402,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
               ),
             )
-          else if (_aiDiagnosis != null)
+          else if (_aiDiagnosis != null) ...[
             Text(
               _aiDiagnosis!,
               style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, height: 1.45),
-            )
-          else
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const FinancialAdvisorChatScreen()),
+                );
+              },
+              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16, color: AppColors.primary),
+              label: const Text('Preguntarle al Asesor IA sobre esto', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
+            ),
+          ] else
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -415,17 +431,38 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  ),
-                  onPressed: count == 0
-                      ? null
-                      : () => _generateAiDiagnosis(totalIncome, totalExpense, categoryExpenses, count),
-                  icon: const Icon(Icons.psychology_rounded, size: 18, color: Colors.white),
-                  label: const Text('Generar Diagnóstico IA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      ),
+                      onPressed: count == 0
+                          ? null
+                          : () => _generateAiDiagnosis(totalIncome, totalExpense, categoryExpenses, count),
+                      icon: const Icon(Icons.psychology_rounded, size: 18, color: Colors.white),
+                      label: const Text('Generar Diagnóstico', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.accent),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const FinancialAdvisorChatScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.forum_outlined, size: 16, color: AppColors.accent),
+                      label: const Text('Chat Asesor', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                  ],
                 ),
+
               ],
             ),
         ],

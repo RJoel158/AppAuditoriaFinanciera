@@ -23,18 +23,29 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _initialized = false;
+  bool _hasCustomApiKey = false;
 
   final List<String> _quickPrompts = [
-    '💡 ¿Cómo podemos ahorrar más?',
-    '📊 ¿En qué gastamos más este mes?',
-    '🎯 ¿Cuál sería un presupuesto semanal ideal?',
-    '🛒 Consejos para reducir el gasto de comida',
+    '💡 ¿Cómo podemos ahorrar más este mes?',
+    '📊 ¿En qué se fue la mayor parte del dinero?',
+    '🎯 ¿Cuál es el presupuesto semanal recomendado?',
+    '🛒 ¿Cómo podemos recortar gastos de comida?',
     '🔍 ¿Nos alcanza para un gasto extra de Bs 200?',
   ];
 
   @override
   void initState() {
     super.initState();
+    _checkApiKeyStatus();
+  }
+
+  Future<void> _checkApiKeyStatus() async {
+    final key = await GeminiAiService.getApiKey();
+    if (mounted) {
+      setState(() {
+        _hasCustomApiKey = key.isNotEmpty;
+      });
+    }
   }
 
   @override
@@ -54,11 +65,88 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
     _messages.add(
       ChatMessage(
         id: 'welcome',
-        text: '¡Hola $userName! Soy tu Asesor Financiero Familiar con IA.\n\n'
+        text: '¡Hola $userName! Soy tu Asesor Financiero Familiar.\n\n'
             'Tengo acceso al balance del hogar en tiempo real (Balance actual: **$balanceText**).\n\n'
-            '¿En qué puedo orientarte hoy para optimizar la economía de la familia?',
+            'Puedo analizar en qué gastan más, evaluar si les alcanza para una compra o darles un plan de ahorro. ¿En qué te oriento hoy?',
         isUser: false,
         timestamp: DateTime.now(),
+      ),
+    );
+  }
+
+  void _showApiKeyDialog() async {
+    final currentKey = await GeminiAiService.getApiKey();
+    final keyController = TextEditingController(text: currentKey);
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.vpn_key_rounded, color: AppColors.accent, size: 22),
+            SizedBox(width: 8),
+            Text('Clave Gemini AI (Opcional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Puedes ingresar tu API Key gratuita de Google AI Studio para activar respuestas ilimitadas y creativas en la nube con Gemini 1.5 Flash.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: keyController,
+              decoration: const InputDecoration(
+                labelText: 'API Key de Gemini',
+                hintText: 'AIzaSy...',
+                prefixIcon: Icon(Icons.key_rounded),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Si no tienes una clave, la app continuará usando su motor analítico local en tiempo real sin costo.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              final enteredKey = keyController.text.trim();
+              await GeminiAiService.saveApiKey(enteredKey);
+              nav.pop();
+              if (mounted) {
+                _checkApiKeyStatus();
+                messenger.showSnackBar(
+                  SnackBar(
+                    backgroundColor: AppColors.primary,
+                    content: Text(
+                      enteredKey.isNotEmpty
+                          ? 'Clave de Gemini guardada. Respuestas inteligentes activadas.'
+                          : 'Modo local activo.',
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+
       ),
     );
   }
@@ -164,6 +252,7 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
       balance: totalIncome - totalExpense,
       categoryExpenses: categoryExpenses,
       totalRecordsCount: currentMonthRecords.length,
+      recentRecords: currentMonthRecords,
     );
   }
 
@@ -192,18 +281,31 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
                   child: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 18),
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Asesor Financiero IA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('Gemini 1.5 Flash • En Línea', style: TextStyle(fontSize: 11, color: AppColors.primary)),
+                      const Text('Asesor Financiero IA', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      Text(
+                        _hasCustomApiKey ? 'Gemini 1.5 Flash • Nube' : 'Motor Analítico Local • Activo',
+                        style: const TextStyle(fontSize: 10, color: AppColors.primary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
             actions: [
+              IconButton(
+                icon: Icon(
+                  Icons.vpn_key_rounded,
+                  color: _hasCustomApiKey ? AppColors.accent : AppColors.textMuted,
+                  size: 20,
+                ),
+                tooltip: 'Configurar Gemini API Key',
+                onPressed: _showApiKeyDialog,
+              ),
               IconButton(
                 icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
                 tooltip: 'Reiniciar Chat',
@@ -223,9 +325,9 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.surface,
-                  border: const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                  border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -245,7 +347,7 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
                       ],
                     ),
                     Text(
-                      '${financialContext.totalRecordsCount} registros activos',
+                      '${financialContext.totalRecordsCount} movimientos',
                       style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                     ),
                   ],
@@ -265,7 +367,7 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
                 ),
               ),
 
-              // 3. Indicador de escritura del Asesor
+              // 3. Indicador de análisis del Asesor
               if (_isLoading)
                 Padding(
                   padding: const EdgeInsets.only(left: 16, bottom: 8),
@@ -287,7 +389,7 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
                               child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                             ),
                             SizedBox(width: 8),
-                            Text('El asesor está analizando...', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                            Text('El asesor está analizando sus finanzas...', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
                           ],
                         ),
                       ),
