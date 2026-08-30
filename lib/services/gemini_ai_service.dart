@@ -1,11 +1,112 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../core/constants/app_categories.dart';
+import '../models/chat_message.dart';
+
+class FamilyFinancialContext {
+  final String userName;
+  final String userRole;
+  final double totalIncome;
+  final double totalExpense;
+  final double balance;
+  final Map<String, double> categoryExpenses;
+  final int totalRecordsCount;
+
+  const FamilyFinancialContext({
+    required this.userName,
+    required this.userRole,
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.balance,
+    required this.categoryExpenses,
+    required this.totalRecordsCount,
+  });
+
+  String toFormattedSummary() {
+    final savingsRate = totalIncome > 0 ? ((balance / totalIncome) * 100).clamp(-100, 100) : 0.0;
+
+    final sortedCategories = categoryExpenses.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final topExpenses = sortedCategories.take(4).map((e) {
+      final cat = AppCategories.getCategoryById(e.key);
+      final percent = totalExpense > 0 ? (e.value / totalExpense * 100).toStringAsFixed(1) : '0';
+      return '- ${cat.name}: Bs ${e.value.toStringAsFixed(2)} ($percent%)';
+    }).join('\n');
+
+    return '''
+Contexto Financiero Familiar Actual:
+- Usuario que consulta: $userName ($userRole)
+- Ingresos del Mes: Bs ${totalIncome.toStringAsFixed(2)}
+- Egresos del Mes: Bs ${totalExpense.toStringAsFixed(2)}
+- Balance / Ahorro Actual: Bs ${balance.toStringAsFixed(2)}
+- Tasa de Ahorro: ${savingsRate.toStringAsFixed(1)}%
+- Total Transacciones Registradas: $totalRecordsCount
+Principales Categorías de Gasto:
+${topExpenses.isNotEmpty ? topExpenses : "- No hay gastos registrados aún."}
+''';
+  }
+}
 
 class GeminiAiService {
-  // Clave de API opcional (puede cargarse o usar fallback local inteligente sin costo)
   static const String _defaultApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
-  /// Genera un diagnóstico financiero familiar conciso y 100% acotado a los datos reales
+  /// Conversación fluida con el Asesor Financiero Familiar IA
+  static Future<String> chatWithAdvisor({
+    required String userMessage,
+    required List<ChatMessage> history,
+    required FamilyFinancialContext context,
+    String? customApiKey,
+  }) async {
+    final apiKey = customApiKey?.isNotEmpty == true ? customApiKey! : _defaultApiKey;
+    final contextSummary = context.toFormattedSummary();
+
+    if (apiKey.isNotEmpty) {
+      try {
+        final systemPrompt = '''
+Eres el Asesor Financiero Familiar oficial del hogar. Eres cercano, empático, claro y pedagógico.
+Tu misión es ayudar a la familia a tomar mejores decisiones de ahorro y control de gastos sin usar tecnicismos complejos.
+
+Reglas estrictas:
+1. Responde de forma concisa (máximo 2 a 4 párrafos cortos o viñetas).
+2. Basa tus cálculos y consejos estrictamente en los datos numéricos provistos a continuación.
+3. Si el usuario pregunta si les alcanza para un gasto extra, evalúa su balance actual y recomienda montos prudentes.
+4. Si sugieres metas, hazlas amigables y alcanzables para el hogar.
+
+$contextSummary
+''';
+
+        final model = GenerativeModel(
+          model: 'gemini-1.5-flash',
+          apiKey: apiKey,
+          generationConfig: GenerationConfig(
+            temperature: 0.3,
+            maxOutputTokens: 350,
+          ),
+          systemInstruction: Content.system(systemPrompt),
+        );
+
+        // Construir historial de conversación
+        final contents = <Content>[];
+        for (final msg in history.take(8)) {
+          if (msg.isUser) {
+            contents.add(Content.text('Usuario: ${msg.text}'));
+          } else {
+            contents.add(Content.model([TextPart(msg.text)]));
+          }
+        }
+        contents.add(Content.text(userMessage));
+
+        final response = await model.generateContent(contents);
+        if (response.text != null && response.text!.trim().isNotEmpty) {
+          return response.text!.trim();
+        }
+      } catch (_) {}
+    }
+
+    // Fallback Inteligente Local en caso de no tener API Key activa o estar offline
+    return _generateLocalChatbotResponse(userMessage, context);
+  }
+
+  /// Diagnóstico estático de reporte
   static Future<String> generateFinancialDiagnosis({
     required double totalIncome,
     required double totalExpense,
@@ -13,114 +114,66 @@ class GeminiAiService {
     required int totalTransactions,
     String? customApiKey,
   }) async {
-    final apiKey = customApiKey?.isNotEmpty == true ? customApiKey! : _defaultApiKey;
-
-    final balance = totalIncome - totalExpense;
-    final savingsRate = totalIncome > 0 ? ((balance / totalIncome) * 100).clamp(-100, 100) : 0.0;
-
-    // Obtener las 3 categorías con mayor gasto
-    final sortedCategories = categoryExpenses.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final topExpenses = sortedCategories.take(3).map((e) {
-      final cat = AppCategories.getCategoryById(e.key);
-      final percent = totalExpense > 0 ? (e.value / totalExpense * 100).toStringAsFixed(1) : '0';
-      return '- ${cat.name}: Bs ${e.value.toStringAsFixed(2)} ($percent%)';
-    }).join('\n');
-
-    final dataSummary = '''
-Resumen Numérico Familiar:
-- Ingresos Totales: Bs ${totalIncome.toStringAsFixed(2)}
-- Egresos Totales: Bs ${totalExpense.toStringAsFixed(2)}
-- Balance Neto: Bs ${balance.toStringAsFixed(2)}
-- Tasa de Ahorro: ${savingsRate.toStringAsFixed(1)}%
-- Total Transacciones Registradas: $totalTransactions
-Principales Categorías de Gasto:
-$topExpenses
-''';
-
-    if (apiKey.isNotEmpty) {
-      try {
-        final model = GenerativeModel(
-          model: 'gemini-1.5-flash',
-          apiKey: apiKey,
-          generationConfig: GenerationConfig(
-            temperature: 0.2,
-            maxOutputTokens: 250,
-          ),
-        );
-
-        final prompt = '''
-Eres un asesor financiero casero, cercano y amigable para una familia.
-Analiza exclusivamente los siguientes datos numéricos de este reporte. No inventes información externa ni asumas datos no provistos.
-Emite un diagnóstico breve (2-3 líneas) y exactamente 2 recomendaciones prácticas y concretas para el hogar.
-
-$dataSummary
-''';
-
-        final response = await model.generateContent([Content.text(prompt)]);
-        if (response.text != null && response.text!.trim().isNotEmpty) {
-          return response.text!.trim();
-        }
-      } catch (_) {
-        // Fallback a motor heurístico si falla la llamada
-      }
-    }
-
-    // Motor Heurístico Inteligente Local (0 Costos, 100% Confiable Offline)
-    return _generateLocalHeuristicDiagnosis(
+    final context = FamilyFinancialContext(
+      userName: 'Familia',
+      userRole: 'Hogar',
       totalIncome: totalIncome,
       totalExpense: totalExpense,
-      balance: balance,
-      savingsRate: savingsRate.toDouble(),
-      sortedCategories: sortedCategories,
+      balance: totalIncome - totalExpense,
+      categoryExpenses: categoryExpenses,
+      totalRecordsCount: totalTransactions,
     );
 
+    return chatWithAdvisor(
+      userMessage: 'Genera un diagnóstico general breve del mes y exactamente 2 recomendaciones de ahorro para el hogar.',
+      history: [],
+      context: context,
+      customApiKey: customApiKey,
+    );
   }
 
-  static String _generateLocalHeuristicDiagnosis({
-    required double totalIncome,
-    required double totalExpense,
-    required double balance,
-    required double savingsRate,
-    required List<MapEntry<String, double>> sortedCategories,
-  }) {
+  /// Motor de respuestas locales offline para el Chatbot
+  static String _generateLocalChatbotResponse(String message, FamilyFinancialContext ctx) {
+    final lower = message.toLowerCase();
+    final balance = ctx.balance;
+    final sortedCategories = ctx.categoryExpenses.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     final topCatName = sortedCategories.isNotEmpty
         ? AppCategories.getCategoryById(sortedCategories.first.key).name
         : 'Gastos Generales';
+    final topCatAmount = sortedCategories.isNotEmpty ? sortedCategories.first.value : 0.0;
 
-    if (totalIncome == 0 && totalExpense == 0) {
-      return 'No hay suficientes movimientos financieros registrados en el periodo seleccionado para generar un diagnóstico.';
+    if (lower.contains('ahorrar') || lower.contains('ahorro') || lower.contains('guardar')) {
+      if (balance > 0) {
+        return 'Actualmente tienen un saldo a favor de Bs ${balance.toStringAsFixed(2)}. Les recomiendo separar el 40% de este remanente (Bs ${(balance * 0.4).toStringAsFixed(2)}) a un fondo de reserva antes de que termine el mes.';
+      } else {
+        return 'En este momento los egresos superan a los ingresos por Bs ${balance.abs().toStringAsFixed(2)}. La mejor forma de recuperar el ahorro es pausar compras secundarias y fijar un límite estricto para "$topCatName".';
+      }
     }
 
-    final StringBuffer buffer = StringBuffer();
-
-    if (balance >= 0) {
-      buffer.writeln(
-          'Diagnóstico: Salud financiera familiar favorable con un superávit de Bs ${balance.toStringAsFixed(2)} (Tasa de ahorro del ${savingsRate.toStringAsFixed(1)}%).');
-      buffer.writeln('\nRecomendaciones Prácticas:');
-      buffer.writeln(
-          '1. Asignar al menos el 50% del saldo positivo actual (Bs ${(balance * 0.5).toStringAsFixed(2)}) a un fondo de emergencia familiar.');
+    if (lower.contains('gastamos') || lower.contains('mayor') || lower.contains('mas') || lower.contains('más') || lower.contains('categoria') || lower.contains('categoría')) {
       if (sortedCategories.isNotEmpty) {
-        buffer.writeln(
-            '2. Tu mayor concentración de gasto está en "$topCatName" (Bs ${sortedCategories.first.value.toStringAsFixed(2)}). Establecer un tope semanal ayudará a elevar el margen de ahorro.');
+        final percent = ctx.totalExpense > 0 ? (topCatAmount / ctx.totalExpense * 100).toStringAsFixed(1) : '0';
+        return 'La categoría con mayor consumo es **$topCatName** con **Bs ${topCatAmount.toStringAsFixed(2)}** (representa el $percent% del total de egresos). Planificar las compras de esta categoría semanalmente les ahorrará dinero.';
       } else {
-        buffer.writeln(
-            '2. Mantener la constancia en el registro de comprobantes diarios para no perder la trazabilidad de egresos.');
+        return 'Aún no tienen suficientes gastos registrados este mes para identificar la categoría principal.';
       }
-    } else {
-      buffer.writeln(
-          'Diagnóstico: Alerta de déficit financiero familiar de Bs ${balance.abs().toStringAsFixed(2)}. Los egresos superan los ingresos en el periodo analizado.');
-      buffer.writeln('\nRecomendaciones Prácticas:');
-      if (sortedCategories.isNotEmpty) {
-        buffer.writeln(
-            '1. Revisar de inmediato las compras no esenciales en "$topCatName", reduciendo al menos un 15% para equilibrar el presupuesto.');
-      } else {
-        buffer.writeln('1. Pausar gastos prescindibles hasta estabilizar el balance del hogar.');
-      }
-      buffer.writeln(
-          '2. Planificar un presupuesto familiar cerrado para la próxima semana con topes estrictos de consumo.');
     }
 
-    return buffer.toString();
+    if (lower.contains('alcanza') || lower.contains('comprar') || lower.contains('gastar') || lower.contains('salir')) {
+      if (balance > 200) {
+        return 'Tienen un margen disponible de Bs ${balance.toStringAsFixed(2)}. Sí les alcanza para un gasto moderado, pero les sugiero no destinar más de Bs ${(balance * 0.3).toStringAsFixed(2)} para mantener su colchón de seguridad.';
+      } else {
+        return 'El balance actual es ajustado (Bs ${balance.toStringAsFixed(2)}). Les recomiendo posponer gastos no urgentes hasta el próximo ingreso.';
+      }
+    }
+
+    if (lower.contains('presupuesto') || lower.contains('semanal') || lower.contains('recomienda')) {
+      final safeWeekly = ctx.totalIncome > 0 ? (ctx.totalIncome / 4) : 0.0;
+      return 'Para mantener estabilidad, el presupuesto semanal sugerido para todo el hogar es de aproximadamente **Bs ${safeWeekly.toStringAsFixed(2)}**, priorizando alimentación y servicios básicos.';
+    }
+
+    // Respuesta general de saludo / ayuda
+    return '¡Hola ${ctx.userName}! Analizando sus registros, este mes llevan un total de **Bs ${ctx.totalIncome.toStringAsFixed(2)}** en ingresos y **Bs ${ctx.totalExpense.toStringAsFixed(2)}** en egresos (Balance: **Bs ${balance.toStringAsFixed(2)}**).\n\nPuedes preguntarme sobre cómo optimizar una categoría, sugerir un presupuesto o consultar si les alcanza para un gasto.';
   }
 }

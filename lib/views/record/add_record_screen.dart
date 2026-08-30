@@ -34,6 +34,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final StorageService _storageService = StorageService();
   final AuthService _authService = AuthService();
+  final DuplicateCheckerService _duplicateChecker = DuplicateCheckerService();
 
   RecordType _selectedType = RecordType.expense;
   String _selectedCategory = AppCategories.expenseCategories.first.id;
@@ -160,20 +161,25 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     }
   }
 
-  final DuplicateCheckerService _duplicateChecker = DuplicateCheckerService();
-
   Future<void> _submitForm({bool forceSave = false}) async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    // 1. Bloqueo inmediato anti-doble clic
+    if (_isSaving) return;
+    if (!_formKey.currentState!.validate()) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
 
     final enteredAmount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final amountInBob = _selectedCurrency == 'USD'
         ? CurrencyFormatter.usdToBob(enteredAmount, rate: _exchangeRate)
         : enteredAmount;
 
-    // Validación Heurística de Duplicados (si no es guardado forzado)
+    // 2. Validación Heurística de Duplicados (si no es guardado forzado)
     if (!forceSave) {
+      setState(() {
+        _isSaving = true; // Bloquea el botón mientras verifica
+      });
+
       final duplicate = await _duplicateChecker.checkPotentialDuplicate(
         amount: amountInBob,
         category: _selectedCategory,
@@ -182,6 +188,10 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
       );
 
       if (duplicate != null && mounted) {
+        setState(() {
+          _isSaving = false; // Desbloquea para interactuar con el diálogo
+        });
+
         final categoryItem = AppCategories.getCategoryById(_selectedCategory);
         final diffMinutes = _selectedDate.difference(duplicate.date).inMinutes.abs();
         final timeText = diffMinutes == 0 ? 'hace unos momentos' : 'hace $diffMinutes min';
@@ -227,6 +237,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
       }
     }
 
+    // 3. Proceso de Guardado
     setState(() {
       _isSaving = true;
       _uploadProgress = 0.0;
@@ -236,7 +247,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
       String? imageUrl;
       String? storagePath;
 
-      // 1. Subir imagen comprimida
+      // Subir imagen si existe
       if (_selectedImage != null) {
         final uploadResult = await _storageService.uploadReceiptImage(
           imageFile: _selectedImage!,
@@ -252,7 +263,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
         storagePath = uploadResult.storagePath;
       }
 
-      // 2. Crear objeto del registro
+      // Crear objeto del registro
       final newRecord = FinancialRecord(
         id: '',
         title: _titleController.text.trim(),
@@ -271,41 +282,35 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
         memberId: _selectedMember.id,
       );
 
-      // 3. Guardar en Firestore
+      // Guardar en Firestore
       await _firestoreService.addRecord(newRecord);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.primary,
-            content: Text(
-              '${_selectedType.label} guardado por ${_selectedMember.name} correctamente.',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-            ),
+      nav.pop();
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.primary,
+          content: Text(
+            '${_selectedType.label} guardado por ${_selectedMember.name} correctamente.',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           ),
-        );
-        Navigator.pop(context);
-      }
+        ),
+      );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        setState(() {
+          _isSaving = false;
+        });
+        messenger.showSnackBar(
           SnackBar(
             backgroundColor: AppColors.expense,
             content: Text('Error al guardar registro: $e'),
           ),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
     }
   }
 
   @override
-
   Widget build(BuildContext context) {
     final enteredAmount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final convertedAmountBob = CurrencyFormatter.usdToBob(enteredAmount, rate: _exchangeRate);
@@ -315,140 +320,298 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
       appBar: AppBar(
         title: const Text('Nuevo Registro Financiero'),
       ),
-      body: _isSaving
-          ? _buildSavingOverlay()
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                children: [
-                  // 1. Selector de Tipo (Ingreso / Egreso)
-                  TransactionTypeToggle(
-                    selectedType: _selectedType,
-                    onChanged: _onTypeChanged,
-                  ),
-                  const SizedBox(height: 18),
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              children: [
+                // 1. Selector de Tipo (Ingreso / Egreso)
+                TransactionTypeToggle(
+                  selectedType: _selectedType,
+                  onChanged: _isSaving ? (_) {} : _onTypeChanged,
+                ),
+                const SizedBox(height: 18),
 
-                  // 2. Campo de Monto con Selector Integrado (USD / BOB)
-                  TextFormField(
-                    controller: _amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      LengthLimitingTextInputFormatter(12),
-                      FilteringTextInputFormatter.allow(RegExp(r'^\d+[\.,]?\d{0,2}')),
-                    ],
-                    onChanged: (_) => setState(() {}),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Monto de la transacción *',
-                      prefixIcon: Container(
-                        margin: const EdgeInsets.only(left: 8, right: 10, top: 6, bottom: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _selectedCurrency == 'USD'
-                              ? AppColors.accent.withAlpha(25)
-                              : AppColors.primary.withAlpha(25),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: _selectedCurrency == 'USD'
-                                ? AppColors.accent.withAlpha(70)
-                                : AppColors.primary.withAlpha(70),
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedCurrency,
-                            dropdownColor: AppColors.surface,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'BOB',
-                                child: Text(
-                                  'BOB',
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                              DropdownMenuItem(
-                                value: 'USD',
-                                child: Text(
-                                  'USD',
-                                  style: TextStyle(
-                                    color: AppColors.accent,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedCurrency = val;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                      hintText: '0.00',
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Ingresa un monto válido';
-                      }
-                      final parsed = double.tryParse(val.replaceAll(',', '.'));
-                      if (parsed == null || parsed <= 0) {
-                        return 'El monto debe ser mayor a 0';
-                      }
-                      return null;
-                    },
+                // 2. Campo de Monto con Selector Integrado (USD / BOB)
+                TextFormField(
+                  controller: _amountController,
+                  enabled: !_isSaving,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(12),
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+[\.,]?\d{0,2}')),
+                  ],
+                  onChanged: (_) => setState(() {}),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
-
-                  // Caja de conversión responsiva para USD
-                  if (_selectedCurrency == 'USD' && enteredAmount > 0) ...[
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.all(10),
+                  decoration: InputDecoration(
+                    labelText: 'Monto de la transacción *',
+                    prefixIcon: Container(
+                      margin: const EdgeInsets.only(left: 8, right: 10, top: 6, bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.accent.withAlpha(15),
+                        color: _selectedCurrency == 'USD'
+                            ? AppColors.accent.withAlpha(25)
+                            : AppColors.primary.withAlpha(25),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.accent.withAlpha(40)),
+                        border: Border.all(
+                          color: _selectedCurrency == 'USD'
+                              ? AppColors.accent.withAlpha(70)
+                              : AppColors.primary.withAlpha(70),
+                        ),
                       ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedCurrency,
+                          dropdownColor: AppColors.surface,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'BOB',
+                              child: Text(
+                                'BOB',
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            DropdownMenuItem(
+                              value: 'USD',
+                              child: Text(
+                                'USD',
+                                style: TextStyle(
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: _isSaving
+                              ? null
+                              : (val) {
+                                  if (val != null) {
+                                    setState(() {
+                                      _selectedCurrency = val;
+                                    });
+                                  }
+                                },
+                        ),
+                      ),
+                    ),
+                    hintText: '0.00',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Ingresa un monto válido';
+                    }
+                    final parsed = double.tryParse(val.replaceAll(',', '.'));
+                    if (parsed == null || parsed <= 0) {
+                      return 'El monto debe ser mayor a 0';
+                    }
+                    return null;
+                  },
+                ),
+
+                // Caja de conversión responsiva para USD
+                if (_selectedCurrency == 'USD' && enteredAmount > 0) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withAlpha(15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.accent.withAlpha(40)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'T.C. Referencial: 1 USD = ${_exchangeRate.toStringAsFixed(2)} Bs',
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                            ),
+                            const Text(
+                              'Mercado Actual',
+                              style: TextStyle(color: AppColors.textMuted, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          alignment: Alignment.centerLeft,
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '≈ Bs ${NumberFormat("#,##0.00", "es_BO").format(convertedAmountBob)}',
+                            style: const TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 16),
+
+                // 3. Título / Concepto (Con límite de 50 caracteres)
+                TextFormField(
+                  controller: _titleController,
+                  enabled: !_isSaving,
+                  maxLength: 50,
+                  decoration: const InputDecoration(
+                    labelText: 'Concepto / Título *',
+                    hintText: 'Ej. Compra semanal en supermercado',
+                    prefixIcon: Icon(Icons.edit_note_rounded),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    counterStyle: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'El concepto es obligatorio';
+                    }
+                    if (val.trim().length < 3) {
+                      return 'Debe tener al menos 3 caracteres';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 4),
+
+                // 4. Selector de Categoría
+                const Text(
+                  'Categoría',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                CategoryDropdown(
+                  recordType: _selectedType,
+                  selectedCategory: _selectedCategory,
+                  onCategoryChanged: _isSaving
+                      ? (_) {}
+                      : (cat) {
+                          setState(() {
+                            _selectedCategory = cat;
+                          });
+                        },
+                ),
+                const SizedBox(height: 14),
+
+                // 5. Miembro Familiar y Fecha
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Miembro
+                    Expanded(
+                      flex: 5,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'T.C. Referencial: 1 USD = ${_exchangeRate.toStringAsFixed(2)} Bs',
-                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                              ),
-                              const Text(
-                                'Mercado Actual',
-                                style: TextStyle(color: AppColors.textMuted, fontSize: 10),
-                              ),
-                            ],
+                          const Text(
+                            'Registrado por',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          FittedBox(
-                            alignment: Alignment.centerLeft,
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              '≈ Bs ${NumberFormat("#,##0.00", "es_BO").format(convertedAmountBob)}',
-                              style: const TextStyle(
-                                color: AppColors.accent,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                          const SizedBox(height: 6),
+                          if (isAdmin)
+                            MemberDropdown(
+                              selectedMemberId: _selectedMember.id,
+                              onMemberChanged: _isSaving
+                                  ? (_) {}
+                                  : (member) {
+                                      setState(() {
+                                        _selectedMember = member;
+                                      });
+                                    },
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _selectedMember.color.withAlpha(25),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: _selectedMember.color.withAlpha(60)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(_selectedMember.icon, size: 16, color: _selectedMember.color),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _selectedMember.name,
+                                      style: TextStyle(
+                                        color: _selectedMember.color,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Selector de Fecha
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Fecha',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          InkWell(
+                            onTap: _isSaving ? null : _selectDate,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceLight.withAlpha(80),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.textSecondary),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      DateFormat('dd/MM/yyyy').format(_selectedDate),
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -456,248 +619,99 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 14),
 
-                  const SizedBox(height: 16),
-
-                  // 3. Título / Concepto (Con límite de 50 caracteres)
-                  TextFormField(
-                    controller: _titleController,
-                    maxLength: 50,
-                    decoration: const InputDecoration(
-                      labelText: 'Concepto / Título *',
-                      hintText: 'Ej. Compra semanal en supermercado',
-                      prefixIcon: Icon(Icons.edit_note_rounded),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      counterStyle: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'El concepto es obligatorio';
-                      }
-                      if (val.trim().length < 3) {
-                        return 'Debe tener al menos 3 caracteres';
-                      }
-                      return null;
-                    },
+                // 6. Comprobante fotográfico con compresión
+                const Text(
+                  'Comprobante o Factura (Opcional)',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 4),
+                ),
+                const SizedBox(height: 8),
+                ImageUploadCard(
+                  selectedImageFile: _selectedImage,
+                  compressionResult: _compressionResult,
+                  isCompressing: _isCompressing,
+                  onImageSelected: _isSaving ? (_) {} : _handleImageSelected,
+                  onRemoveImage: _isSaving ? () {} : _handleRemoveImage,
+                ),
+                const SizedBox(height: 14),
 
-                  // 4. Selector de Categoría
-                  const Text(
-                    'Categoría',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                // 7. Notas adicionales / Descripción (Con límite de 250 caracteres)
+                TextFormField(
+                  controller: _descriptionController,
+                  enabled: !_isSaving,
+                  maxLength: 250,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Notas adicionales (Opcional)',
+                    hintText: 'Detalles de la auditoría, observaciones...',
+                    alignLabelWithHint: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    counterStyle: TextStyle(color: AppColors.textMuted, fontSize: 11),
                   ),
-                  const SizedBox(height: 6),
-                  CategoryDropdown(
-                    recordType: _selectedType,
-                    selectedCategory: _selectedCategory,
-                    onCategoryChanged: (cat) {
-                      setState(() {
-                        _selectedCategory = cat;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 14),
+                ),
+                const SizedBox(height: 20),
 
-                  // 5. Miembro Familiar y Fecha (Solo admin puede reasignar)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // 8. Botón de Guardado con Protección Anti Doble Click
+                ElevatedButton.icon(
+                  onPressed: _isSaving ? null : () => _submitForm(),
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_circle_outline_rounded),
+                  label: Text(
+                    _isSaving ? 'Guardando...' : 'Guardar y Sincronizar Registro',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 32),
+              ],
+            ),
+          ),
+
+          // 9. Overlay semi-transparente durante el guardado
+          if (_isSaving)
+            Container(
+              color: Colors.black.withAlpha(160),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  margin: const EdgeInsets.symmetric(horizontal: 32),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Miembro
-                      Expanded(
-                        flex: 5,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Registrado por',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            if (isAdmin)
-                              MemberDropdown(
-                                selectedMemberId: _selectedMember.id,
-                                onMemberChanged: (member) {
-                                  setState(() {
-                                    _selectedMember = member;
-                                  });
-                                },
-                              )
-                            else
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: _selectedMember.color.withAlpha(25),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: _selectedMember.color.withAlpha(60)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(_selectedMember.icon, size: 16, color: _selectedMember.color),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _selectedMember.name,
-                                        style: TextStyle(
-                                          color: _selectedMember.color,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
+                      const CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Guardando en Firestore...',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
                       ),
-                      const SizedBox(width: 10),
-                      // Selector de Fecha
-                      Expanded(
-                        flex: 5,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Fecha',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            InkWell(
-                              onTap: _selectDate,
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceLight.withAlpha(80),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.textSecondary),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        DateFormat('dd/MM/yyyy').format(_selectedDate),
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                      if (_selectedImage != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          'Subiendo comprobante: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                         ),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 14),
-
-                  // 6. Comprobante fotográfico con compresión
-                  const Text(
-                    'Comprobante o Factura (Opcional)',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ImageUploadCard(
-                    selectedImageFile: _selectedImage,
-                    compressionResult: _compressionResult,
-                    isCompressing: _isCompressing,
-                    onImageSelected: _handleImageSelected,
-                    onRemoveImage: _handleRemoveImage,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // 7. Notas adicionales / Descripción (Con límite de 250 caracteres)
-                  TextFormField(
-                    controller: _descriptionController,
-                    maxLength: 250,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Notas adicionales (Opcional)',
-                      hintText: 'Detalles de la auditoría, observaciones...',
-                      alignLabelWithHint: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      counterStyle: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 8. Botón de Guardado
-                  ElevatedButton.icon(
-                    onPressed: _submitForm,
-                    icon: const Icon(Icons.check_circle_outline_rounded),
-                    label: const Text(
-                      'Guardar y Sincronizar Registro',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                ),
               ),
             ),
-    );
-  }
-
-  Widget _buildSavingOverlay() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(
-              color: AppColors.primary,
-              strokeWidth: 3,
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Guardando y Sincronizando...',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (_selectedImage != null) ...[
-              Text(
-                'Subiendo comprobante optimizado: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: _uploadProgress > 0 ? _uploadProgress : null,
-                backgroundColor: AppColors.surfaceLight,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-              ),
-            ] else
-              const Text(
-                'Enviando a Firebase Firestore...',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
