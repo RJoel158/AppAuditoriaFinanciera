@@ -303,25 +303,8 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     }
   }
 
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.expense,
-            content: Text('Error al guardar registro: $e'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
   @override
+
   Widget build(BuildContext context) {
     final enteredAmount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final convertedAmountBob = CurrencyFormatter.usdToBob(enteredAmount, rate: _exchangeRate);
