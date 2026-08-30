@@ -71,9 +71,10 @@ $dataSummary
       totalIncome: totalIncome,
       totalExpense: totalExpense,
       balance: balance,
-      savingsRate: savingsRate,
+      savingsRate: savingsRate.toDouble(),
       sortedCategories: sortedCategories,
     );
+
   }
 
   static String _generateLocalHeuristicDiagnosis({

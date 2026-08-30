@@ -8,6 +8,7 @@ import '../../services/storage_service.dart';
 import '../admin/admin_panel_screen.dart';
 import '../auth/login_screen.dart';
 import '../record/add_record_screen.dart';
+import '../reports/reports_screen.dart';
 import 'widgets/balance_header.dart';
 import 'widgets/category_filter_bar.dart';
 import 'widgets/record_detail_sheet.dart';
@@ -170,7 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 2. Acceso al Panel de Administración (ESTRICTAMENTE SOLO PARA ADMIN)
+          // 2. Acceso a Reportes y Diagnóstico IA
+          IconButton(
+            icon: const Icon(Icons.analytics_outlined, color: AppColors.accent),
+            tooltip: 'Reportes e IA',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ReportsScreen()),
+              );
+            },
+          ),
+
+          // 3. Acceso al Panel de Administración (ESTRICTAMENTE SOLO PARA ADMIN)
           if (isAdmin)
             IconButton(
               icon: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primary),
@@ -183,12 +196,17 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
 
-          // 3. Menú de Opciones
+          // 4. Menú de Opciones
           PopupMenuButton<String>(
             color: AppColors.surface,
             icon: const Icon(Icons.more_vert_rounded),
             onSelected: (val) {
-              if (val == 'sync') {
+              if (val == 'reports') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ReportsScreen()),
+                );
+              } else if (val == 'sync') {
                 setState(() {
                   _currentLimit = 15;
                 });
@@ -208,6 +226,16 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'reports',
+                child: Row(
+                  children: [
+                    Icon(Icons.analytics_rounded, size: 18, color: AppColors.accent),
+                    SizedBox(width: 8),
+                    Text('Reportes & Diagnóstico IA'),
+                  ],
+                ),
+              ),
               if (isAdmin)
                 const PopupMenuItem(
                   value: 'admin',
@@ -229,6 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'logout',

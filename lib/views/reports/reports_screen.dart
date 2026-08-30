@@ -469,7 +469,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 sections: topCategories.asMap().entries.map((entry) {
                   final idx = entry.key;
                   final item = entry.value;
-                  final percent = totalExpense > 0 ? (item.value / totalExpense * 100) : 0.0;
                   final color = colors[idx % colors.length];
 
                   return PieChartSectionData(
@@ -479,6 +478,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     showTitle: false,
                   );
                 }).toList(),
+
               ),
             ),
           ),

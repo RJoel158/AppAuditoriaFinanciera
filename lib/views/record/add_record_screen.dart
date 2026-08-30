@@ -9,6 +9,7 @@ import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/image_compressor.dart';
 import '../../models/financial_record.dart';
 import '../../services/auth_service.dart';
+import '../../services/duplicate_checker_service.dart';
 import '../../services/exchange_rate_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
