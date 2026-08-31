@@ -578,11 +578,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
           : () => _exportPdf(filteredRecords, totalIncome, totalExpense),
       icon: _isExportingPdf
           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-          : const Icon(Icons.picture_as_pdf_rounded, color: AppColors.primary, size: 20),
+          : const Icon(Icons.share_rounded, color: AppColors.primary, size: 20),
       label: Text(
-        _isExportingPdf ? 'Preparando PDF...' : 'Exportar Reporte a PDF (Local 0 Costos)',
+        _isExportingPdf ? 'Generando y abriendo opciones para compartir...' : 'Exportar y Compartir PDF (WhatsApp / Drive)',
         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
       ),
+
     );
   }
 

@@ -64,11 +64,16 @@ class PdfReportService {
       ),
     );
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'FamFinance_Reporte_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+    final pdfBytes = await pdf.save();
+    final filename = 'FamFinance_Reporte_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+
+    // Despliega automáticamente la ventana nativa de compartir de Android (WhatsApp, Drive, Gmail, etc.)
+    await Printing.sharePdf(
+      bytes: pdfBytes,
+      filename: filename,
     );
   }
+
 
   static pw.Widget _buildHeader(String periodLabel) {
     return pw.Container(
