@@ -9,6 +9,8 @@ import '../../services/firestore_service.dart';
 import '../../services/gemini_ai_service.dart';
 import '../../services/pdf_report_service.dart';
 import '../ai_advisor/financial_advisor_chat_screen.dart';
+import '../ai_advisor/widgets/formatted_ai_markdown.dart';
+
 
 enum DateRangeFilter {
   thisMonth('Este Mes'),
@@ -403,10 +405,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             )
           else if (_aiDiagnosis != null) ...[
-            Text(
-              _aiDiagnosis!,
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, height: 1.45),
+            FormattedAiMarkdown(
+              data: _aiDiagnosis!,
+              fontSize: 13.0,
             ),
+
             const SizedBox(height: 12),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(

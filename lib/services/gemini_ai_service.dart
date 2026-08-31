@@ -142,7 +142,7 @@ $contextSummary
             apiKey: apiKey,
             generationConfig: GenerationConfig(
               temperature: 0.6,
-              maxOutputTokens: 800,
+              maxOutputTokens: 2048,
             ),
             systemInstruction: Content.system(systemPrompt),
           );
@@ -159,8 +159,9 @@ $contextSummary
           contents.add(Content.text(userMessage));
 
           final response = await model.generateContent(contents).timeout(
-            const Duration(seconds: 14),
+            const Duration(seconds: 25),
           );
+
 
           if (response.text != null && response.text!.trim().isNotEmpty) {
             return response.text!.trim();

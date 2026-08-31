@@ -6,6 +6,8 @@ import '../../models/financial_record.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/gemini_ai_service.dart';
+import 'widgets/formatted_ai_markdown.dart';
+
 
 class FinancialAdvisorChatScreen extends StatefulWidget {
   const FinancialAdvisorChatScreen({super.key});
@@ -505,14 +507,11 @@ class _FinancialAdvisorChatScreenState extends State<FinancialAdvisorChatScreen>
                   color: isUser ? Colors.transparent : AppColors.border,
                 ),
               ),
-              child: Text(
-                msg.text,
-                style: TextStyle(
-                  color: isUser ? Colors.white : AppColors.textPrimary,
-                  fontSize: 13,
-                  height: 1.4,
-                ),
+              child: FormattedAiMarkdown(
+                data: msg.text,
+                isUser: isUser,
               ),
+
             ),
           ),
           if (isUser) ...[
