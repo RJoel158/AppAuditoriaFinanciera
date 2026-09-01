@@ -44,8 +44,12 @@ dependencies:
   google_generative_ai: ^0.4.6
   flutter_markdown: ^0.7.4+1
 
+  # Notificaciones Push / Locales enriquecidas
+  flutter_local_notifications: ^18.0.1
+
   # Iconos & UI
   cupertino_icons: ^1.0.8
+
 
 
 dev_dependencies:

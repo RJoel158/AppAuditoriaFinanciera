@@ -4,6 +4,7 @@ import '../../models/family_user.dart';
 import '../../models/financial_record.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/storage_service.dart';
 import '../admin/admin_panel_screen.dart';
 import '../ai_advisor/financial_advisor_chat_screen.dart';
@@ -38,13 +39,21 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+
+    // Iniciar escucha en tiempo real de notificaciones para movimientos de otros familiares
+    final currentUserId = _authService.currentUser?.id ?? '';
+    if (currentUserId.isNotEmpty) {
+      NotificationService().startFamilyListener(currentUserId: currentUserId);
+    }
   }
 
   @override
   void dispose() {
+    NotificationService().stopFamilyListener();
     _scrollController.dispose();
     super.dispose();
   }
+
 
   void _onScroll() {
     if (_scrollController.position.pixels >=
@@ -65,8 +74,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleLogout() async {
+    NotificationService().stopFamilyListener();
     await _authService.logout();
     if (mounted) {
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),

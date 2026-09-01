@@ -5,6 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
+import 'services/notification_service.dart';
 import 'views/auth/login_screen.dart';
 import 'views/home/home_screen.dart';
 
@@ -14,7 +15,11 @@ void main() async {
   // 0. Inicializar soporte de idioma español para fechas (intl)
   await initializeDateFormatting('es', null);
 
-  // 1. Inicialización de Firebase
+  // 1. Inicializar servicio de notificaciones push / locales con canal prioritario
+  await NotificationService().initialize();
+
+  // 2. Inicialización de Firebase
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

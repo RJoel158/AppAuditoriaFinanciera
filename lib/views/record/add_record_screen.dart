@@ -12,7 +12,9 @@ import '../../services/auth_service.dart';
 import '../../services/duplicate_checker_service.dart';
 import '../../services/exchange_rate_service.dart';
 import '../../services/firestore_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/storage_service.dart';
+
 import 'widgets/category_dropdown.dart';
 import 'widgets/image_upload_card.dart';
 import 'widgets/member_dropdown.dart';
@@ -285,7 +287,11 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
       // Guardar en Firestore
       await _firestoreService.addRecord(newRecord);
 
+      // Disparar notificación push local con vista previa de recibo
+      NotificationService().showRecordNotification(record: newRecord, isSelf: true);
+
       nav.pop();
+
       messenger.showSnackBar(
         SnackBar(
           backgroundColor: AppColors.primary,
