@@ -10,6 +10,8 @@ import '../../models/pin_reset_request.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
+import '../../services/storage_service.dart';
+
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -23,6 +25,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
   final AdminService _adminService = AdminService();
   final AuthService _authService = AuthService();
   final FirestoreService _firestoreService = FirestoreService();
+  final StorageService _storageService = StorageService();
   String _auditFilter = 'all'; // 'all', 'active', 'deleted'
 
   @override
@@ -33,7 +36,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
       if (mounted) setState(() {});
     });
   }
-
 
   @override
   void dispose() {
@@ -89,33 +91,35 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             content: SizedBox(
-              width: MediaQuery.of(ctx).size.width,
-              child: Form(
-                key: formKey,
-                child: SingleChildScrollView(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       TextFormField(
                         controller: nameController,
                         decoration: const InputDecoration(
-                          labelText: 'Nombre Completo *',
-                          hintText: 'ej. Tía Carmen',
-                          prefixIcon: Icon(Icons.badge_outlined, size: 20),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          labelText: 'Nombre Completo / Rol',
+                          hintText: 'Ej: Tío Carlos, Hermana',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
                         ),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa un nombre' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa el nombre' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: aliasController,
                         decoration: const InputDecoration(
-                          labelText: 'Alias único (Login) *',
-                          hintText: 'ej. carmen',
-                          prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          labelText: 'Alias / Usuario (Login)',
+                          hintText: 'Ej: carlos',
+                          prefixIcon: Icon(Icons.alternate_email_rounded),
                         ),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Ingresa un alias' : null,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Ingresa el alias';
+                          if (v.contains(' ')) return 'No uses espacios';
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -123,36 +127,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
                         keyboardType: TextInputType.number,
                         maxLength: 6,
                         decoration: const InputDecoration(
-                          labelText: 'PIN Inicial (4-6 dígitos) *',
-                          hintText: '1234',
-                          prefixIcon: Icon(Icons.pin_outlined, size: 20),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          counterStyle: TextStyle(color: AppColors.textMuted, fontSize: 10),
+                          labelText: 'PIN de Acceso Inicial',
+                          hintText: '4 a 6 dígitos',
+                          prefixIcon: Icon(Icons.pin_outlined),
                         ),
-                        validator: (v) => v == null || v.trim().length < 4 ? 'Mínimo 4 dígitos' : null,
+                        validator: (v) {
+                          if (v == null || v.length < 4) return 'Mínimo 4 dígitos';
+                          return null;
+                        },
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       DropdownButtonFormField<UserRole>(
                         initialValue: selectedRole,
                         decoration: const InputDecoration(
                           labelText: 'Rol en la Familia',
-                          prefixIcon: Icon(Icons.security_rounded, size: 20),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          prefixIcon: Icon(Icons.shield_outlined),
                         ),
-                        dropdownColor: AppColors.surface,
+
                         items: const [
-                          DropdownMenuItem(
-                            value: UserRole.member,
-                            child: Text('Familiar (Registro & Vista)', style: TextStyle(fontSize: 13)),
-                          ),
-                          DropdownMenuItem(
-                            value: UserRole.admin,
-                            child: Text('Administrador (Acceso total)', style: TextStyle(fontSize: 13)),
-                          ),
+                          DropdownMenuItem(value: UserRole.member, child: Text('Integrante Familiar')),
+                          DropdownMenuItem(value: UserRole.admin, child: Text('Administrador (Acceso Total)')),
                         ],
-                        onChanged: (r) {
-                          if (r != null) {
-                            setDialogState(() => selectedRole = r);
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => selectedRole = val);
                           }
                         },
                       ),
@@ -170,29 +168,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
                 onPressed: () async {
                   if (formKey.currentState!.validate()) {
+                    nav.pop();
                     try {
                       await _adminService.createFamilyMember(
-                        displayName: nameController.text.trim(),
                         alias: aliasController.text.trim(),
-                        role: selectedRole,
+                        displayName: nameController.text.trim(),
                         initialPin: pinController.text.trim(),
+                        role: selectedRole,
                         avatarIcon: selectedAvatar,
                       );
-                      nav.pop();
                       messenger.showSnackBar(
-                        SnackBar(
+                        const SnackBar(
                           backgroundColor: AppColors.primary,
-                          content: Text('Integrante "${nameController.text.trim()}" agregado exitosamente.'),
+                          content: Text('Integrante creado exitosamente.'),
                         ),
                       );
                     } catch (e) {
                       messenger.showSnackBar(
-                        SnackBar(backgroundColor: AppColors.expense, content: Text('Error: $e')),
+                        SnackBar(
+                          backgroundColor: AppColors.expense,
+                          content: Text('Error: $e'),
+                        ),
                       );
                     }
                   }
                 },
-                child: const Text('Guardar'),
+                child: const Text('Crear Integrante'),
               ),
             ],
           ),
@@ -203,6 +204,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
 
   void _showChangePinDialog(FamilyUser user) {
     final pinController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
     final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
@@ -212,15 +214,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
         return AlertDialog(
           backgroundColor: AppColors.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Cambiar PIN de ${user.displayName}'),
-          content: TextField(
-            controller: pinController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            decoration: const InputDecoration(
-              labelText: 'Nuevo PIN (4 a 6 dígitos)',
-              hintText: 'ej. 5678',
-              prefixIcon: Icon(Icons.lock_outline_rounded, size: 20),
+          title: Text('Cambiar PIN: ${user.displayName}'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: pinController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Nuevo PIN',
+                hintText: '4 a 6 dígitos',
+                prefixIcon: Icon(Icons.key_rounded),
+              ),
+              validator: (v) {
+                if (v == null || v.length < 4) return 'Mínimo 4 dígitos';
+                return null;
+              },
             ),
           ),
           actions: [
@@ -231,19 +241,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: () async {
-                final newPin = pinController.text.trim();
-                if (newPin.length >= 4) {
-                  await _adminService.changeUserPin(user.id, newPin);
+                if (formKey.currentState!.validate()) {
                   nav.pop();
-                  messenger.showSnackBar(
-                    SnackBar(
-                      backgroundColor: AppColors.primary,
-                      content: Text('PIN de ${user.displayName} actualizado a "$newPin".'),
-                    ),
-                  );
+                  try {
+                    await _adminService.changeUserPin(user.id, pinController.text.trim());
+                    messenger.showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppColors.primary,
+                        content: Text('PIN de ${user.displayName} actualizado.'),
+                      ),
+                    );
+                  } catch (e) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppColors.expense,
+                        content: Text('Error al cambiar PIN: $e'),
+                      ),
+                    );
+                  }
                 }
               },
-              child: const Text('Actualizar'),
+              child: const Text('Guardar'),
             ),
           ],
         );
@@ -252,7 +270,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
   }
 
   void _showResolveResetDialog(PinResetRequest request) {
-    final newPinController = TextEditingController(text: '1234');
+    final pinController = TextEditingController(text: '1234');
+    final formKey = GlobalKey<FormState>();
     final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
@@ -262,56 +281,89 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
         return AlertDialog(
           backgroundColor: AppColors.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Restablecer PIN de ${request.displayName}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Alias: @${request.alias}', style: const TextStyle(color: AppColors.textSecondary)),
-              if (request.note.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text('Mensaje: "${request.note}"', style: const TextStyle(fontStyle: FontStyle.italic, color: AppColors.textMuted)),
-              ],
-              const SizedBox(height: 16),
-              TextField(
-                controller: newPinController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Asignar Nuevo PIN',
-                  prefixIcon: Icon(Icons.key_rounded, size: 20),
+          title: Text('Resolver Solicitud: ${request.displayName}'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'El usuario solicita un nuevo PIN. Puedes asignarle uno provisional o rechazar la solicitud.',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: pinController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'Nuevo PIN Asignado',
+                    hintText: '4 a 6 dígitos',
+                    prefixIcon: Icon(Icons.key_rounded),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.length < 4) return 'Mínimo 4 dígitos';
+                    return null;
+                  },
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () async {
-                final adminName = _authService.currentUser?.displayName ?? 'Admin';
-                await _adminService.rejectPinReset(requestId: request.id, resolvedBy: adminName);
                 nav.pop();
+                try {
+                  final adminName = _authService.currentUser?.displayName ?? 'Admin';
+                  await _adminService.rejectPinReset(
+                    requestId: request.id,
+                    resolvedBy: adminName,
+                  );
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      backgroundColor: AppColors.surfaceLight,
+                      content: Text('Solicitud rechazada.'),
+                    ),
+                  );
+                } catch (e) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppColors.expense,
+                      content: Text('Error: $e'),
+                    ),
+                  );
+                }
               },
               child: const Text('Rechazar', style: TextStyle(color: AppColors.expense)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: () async {
-                final newPin = newPinController.text.trim();
-                if (newPin.length >= 4) {
-                  final adminName = _authService.currentUser?.displayName ?? 'Admin';
-                  await _adminService.resolvePinReset(
-                    requestId: request.id,
-                    userId: request.userId,
-                    newPin: newPin,
-                    resolvedBy: adminName,
-                  );
+                if (formKey.currentState!.validate()) {
                   nav.pop();
-                  messenger.showSnackBar(
-                    SnackBar(
-                      backgroundColor: AppColors.primary,
-                      content: Text('PIN restablecido a "$newPin" para @${request.alias}.'),
-                    ),
-                  );
+                  try {
+                    final adminName = _authService.currentUser?.displayName ?? 'Admin';
+                    await _adminService.resolvePinReset(
+                      requestId: request.id,
+                      userId: request.userId,
+                      newPin: pinController.text.trim(),
+                      resolvedBy: adminName,
+                    );
+                    messenger.showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppColors.primary,
+                        content: Text('PIN de ${request.displayName} resuelto a: ${pinController.text.trim()}'),
+                      ),
+                    );
+                  } catch (e) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppColors.expense,
+                        content: Text('Error: $e'),
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Aprobar y Asignar'),
@@ -322,6 +374,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -329,9 +382,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
         title: const Text('Panel de Administración', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: AppColors.primary,
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 14),
           tabs: [
             const Tab(
               icon: Icon(Icons.people_outline_rounded, size: 20),
@@ -392,7 +448,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
           : null,
     );
   }
-
 
   Widget _buildMembersTab() {
     return StreamBuilder<List<FamilyUser>>(
@@ -739,201 +794,590 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
     final isIncome = record.isIncome;
     final category = AppCategories.getCategoryById(record.category);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showAuditDetailSheet(record),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDeleted ? AppColors.expense.withAlpha(100) : AppColors.border,
-          width: isDeleted ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Cabecera con Estado y Monto
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDeleted ? AppColors.expense.withAlpha(100) : AppColors.border,
+              width: isDeleted ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 1. Cabecera con Estado y Monto
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: (isDeleted ? AppColors.expense : (isIncome ? AppColors.income : AppColors.primary)).withAlpha(25),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isDeleted ? Icons.delete_outline_rounded : category.icon,
-                      color: isDeleted ? AppColors.expense : category.color,
-                      size: 18,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: (isDeleted ? AppColors.expense : (isIncome ? AppColors.income : AppColors.primary)).withAlpha(25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isDeleted ? Icons.delete_outline_rounded : category.icon,
+                          color: isDeleted ? AppColors.expense : category.color,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            record.title.isNotEmpty ? record.title : category.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: isDeleted ? AppColors.textMuted : AppColors.textPrimary,
+                              decoration: isDeleted ? TextDecoration.lineThrough : null,
+                            ),
+                          ),
+                          Text(
+                            category.name,
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 10),
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        record.title.isNotEmpty ? record.title : category.name,
+                        '${isIncome ? '+' : '-'} ${CurrencyFormatter.format(record.amount)}',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: isDeleted ? AppColors.textMuted : AppColors.textPrimary,
-                          decoration: isDeleted ? TextDecoration.lineThrough : null,
+                          color: isDeleted
+                              ? AppColors.textMuted
+                              : (isIncome ? AppColors.income : AppColors.expense),
                         ),
                       ),
-                      Text(
-                        category.name,
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                      Container(
+                        margin: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (isDeleted ? AppColors.expense : AppColors.income).withAlpha(25),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          isDeleted ? 'ELIMINADO' : 'ACTIVO',
+                          style: TextStyle(
+                            color: isDeleted ? AppColors.expense : AppColors.income,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: AppColors.border),
+              const SizedBox(height: 8),
+
+              // 2. Trazabilidad: Quién lo creó
+              Row(
                 children: [
+                  const Icon(Icons.person_add_alt_rounded, size: 14, color: AppColors.textMuted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Creado por: ${record.registeredBy} • ${DateFormatter.formatFull(record.createdAt)}',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5),
+                    ),
+                  ),
+                ],
+              ),
+
+              // 3. Trazabilidad: Quién lo eliminó (si aplica)
+              if (isDeleted) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.expense.withAlpha(20),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.expense.withAlpha(60)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.delete_forever_rounded, size: 15, color: AppColors.expense),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Eliminado por: ${record.deletedBy ?? "Usuario"} • ${record.deletedAt != null ? DateFormatter.formatFull(record.deletedAt!) : "Recientemente"}',
+                          style: const TextStyle(
+                            color: AppColors.expense,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // 4. Notas y Comprobante (Preview)
+              if (record.description.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Nota: "${record.description}"',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+
+              if (record.imageUrl != null && record.imageUrl!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: CachedNetworkImage(
+                        imageUrl: record.imageUrl!,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(color: AppColors.surfaceLight, width: 44, height: 44),
+                        errorWidget: (_, __, ___) => const Icon(Icons.receipt_long_rounded, size: 24),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Comprobante adjunto (Toca para ver)', style: TextStyle(color: AppColors.accent, fontSize: 11)),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '🔍 Toca para ver detalle completo',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  ),
+                  if (isDeleted)
+                    Row(
+                      children: [
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.expense,
+                            side: const BorderSide(color: AppColors.expense),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () => _confirmHardDelete(record),
+                          child: const Text('Purgar', style: TextStyle(fontSize: 11)),
+                        ),
+                        const SizedBox(width: 6),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.income,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () => _confirmRestore(record),
+                          child: const Text('Restaurar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAuditDetailSheet(FinancialRecord record) {
+    final isDeleted = record.isDeleted;
+    final isIncome = record.isIncome;
+    final category = AppCategories.getCategoryById(record.category);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Barra de arrastre
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 1. Cabecera con Estado
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isDeleted ? AppColors.expense : AppColors.income).withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: isDeleted ? AppColors.expense : AppColors.income),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isDeleted ? Icons.delete_outline_rounded : Icons.check_circle_rounded,
+                              size: 14,
+                              color: isDeleted ? AppColors.expense : AppColors.income,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              isDeleted ? 'REGISTRO ELIMINADO' : 'REGISTRO ACTIVO',
+                              style: TextStyle(
+                                color: isDeleted ? AppColors.expense : AppColors.income,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 2. Monto y Tipo
                   Text(
                     '${isIncome ? '+' : '-'} ${CurrencyFormatter.format(record.amount)}',
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: isDeleted
-                          ? AppColors.textMuted
-                          : (isIncome ? AppColors.income : AppColors.expense),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      color: isIncome ? AppColors.income : AppColors.expense,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(category.icon, size: 18, color: category.color),
+                      const SizedBox(width: 6),
+                      Text(
+                        category.name,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 16),
+
+                  // 3. Concepto y Descripción
+                  const Text('Concepto:', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    record.title.isNotEmpty ? record.title : 'Sin título',
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+
+                  if (record.description.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('Notas / Descripción:', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight.withAlpha(40),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        record.description,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+
+                  // 4. Bloque de Trazabilidad y Auditoría
+                  const Text('Historial de Auditoría:', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
                   Container(
-                    margin: const EdgeInsets.only(top: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: (isDeleted ? AppColors.expense : AppColors.income).withAlpha(25),
-                      borderRadius: BorderRadius.circular(4),
+                      color: AppColors.surfaceLight.withAlpha(30),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
                     ),
-                    child: Text(
-                      isDeleted ? 'ELIMINADO' : 'ACTIVO',
-                      style: TextStyle(
-                        color: isDeleted ? AppColors.expense : AppColors.income,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                    child: Column(
+                      children: [
+                        _buildAuditInfoRow(Icons.calendar_today_rounded, 'Fecha de Transacción', DateFormatter.formatFull(record.date)),
+                        const Divider(height: 16, color: AppColors.border),
+                        _buildAuditInfoRow(Icons.person_outline_rounded, 'Registrado por', '${record.registeredBy}\n${DateFormatter.formatFull(record.createdAt)}'),
+                        if (isDeleted) ...[
+                          const Divider(height: 16, color: AppColors.border),
+                          _buildAuditInfoRow(
+                            Icons.delete_forever_rounded,
+                            'Eliminado por',
+                            '${record.deletedBy ?? "Usuario"}\n${record.deletedAt != null ? DateFormatter.formatFull(record.deletedAt!) : "Recientemente"}',
+                            color: AppColors.expense,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // 5. Comprobante / Factura con Zoom
+                  if (record.imageUrl != null && record.imageUrl!.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    const Text('Comprobante Adjunto:', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: GestureDetector(
+                        onTap: () => _openFullscreenImage(record.imageUrl!),
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            CachedNetworkImage(
+                              imageUrl: record.imageUrl!,
+                              width: double.infinity,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                height: 220,
+                                color: AppColors.surfaceLight,
+                                child: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                              ),
+                              errorWidget: (_, __, ___) => Container(
+                                height: 140,
+                                color: AppColors.surfaceLight,
+                                child: const Center(child: Icon(Icons.broken_image_outlined, size: 40, color: AppColors.expense)),
+                              ),
+                            ),
+                            Container(
+                              margin: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withAlpha(180),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.zoom_in_rounded, size: 16, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text('Toca para ampliar', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                  ],
 
-          const SizedBox(height: 10),
-          const Divider(height: 1, color: AppColors.border),
-          const SizedBox(height: 8),
+                  const SizedBox(height: 28),
 
-          // 2. Trazabilidad: Quién lo creó
-          Row(
-            children: [
-              const Icon(Icons.person_add_alt_rounded, size: 14, color: AppColors.textMuted),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Creado por: ${record.registeredBy} • ${DateFormatter.formatFull(record.createdAt)}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5),
-                ),
-              ),
-            ],
-          ),
-
-          // 3. Trazabilidad: Quién lo eliminó (si aplica)
-          if (isDeleted) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.expense.withAlpha(20),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.expense.withAlpha(60)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.delete_forever_rounded, size: 15, color: AppColors.expense),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Eliminado por: ${record.deletedBy ?? "Usuario"} • ${record.deletedAt != null ? DateFormatter.formatFull(record.deletedAt!) : "Recientemente"}',
-                      style: const TextStyle(
-                        color: AppColors.expense,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
+                  // 6. Botones de Acción
+                  if (isDeleted)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.expense,
+                              side: const BorderSide(color: AppColors.expense),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _confirmHardDelete(record);
+                            },
+                            icon: const Icon(Icons.delete_forever_rounded),
+                            label: const Text('Borrar Definitivo'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.income,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _confirmRestore(record);
+                            },
+                            icon: const Icon(Icons.restore_from_trash_rounded),
+                            label: const Text('Restaurar', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.expense,
+                          side: const BorderSide(color: AppColors.expense),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _confirmSoftDeleteFromAdmin(record);
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('Mover a Papelera (Eliminar Lógico)'),
                       ),
                     ),
-                  ),
                 ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAuditInfoRow(IconData icon, String label, String value, {Color? color}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: color ?? AppColors.textMuted),
+        const SizedBox(width: 8),
+        Text('$label: ', style: TextStyle(color: color ?? AppColors.textMuted, fontSize: 12)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: color ?? AppColors.textPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.end,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openFullscreenImage(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const CircularProgressIndicator(color: AppColors.primary),
+                  errorWidget: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white, size: 50),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(ctx),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
 
-
-          // 4. Notas y Comprobante
-          if (record.description.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Nota: "${record.description}"',
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
-            ),
-          ],
-
-          if (record.imageUrl != null && record.imageUrl!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: CachedNetworkImage(
-                    imageUrl: record.imageUrl!,
-                    width: 44,
-                    height: 44,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(color: AppColors.surfaceLight, width: 44, height: 44),
-                    errorWidget: (_, __, ___) => const Icon(Icons.receipt_long_rounded, size: 24),
+  void _confirmSoftDeleteFromAdmin(FinancialRecord record) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('¿Archivar este movimiento?'),
+        content: const Text(
+          'El registro se moverá a la papelera lógica y dejará de sumarse en los balances familiares.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.expense),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final adminUser = _authService.currentUser;
+              await _firestoreService.softDeleteRecord(
+                record.id,
+                deletedBy: adminUser?.displayName ?? 'Administrador',
+                deletedByMemberId: adminUser?.id ?? 'admin_user',
+              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: AppColors.surfaceLight,
+                    content: Text('Movimiento archivado en la papelera lógica.'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Text('Comprobante adjunto', style: TextStyle(color: AppColors.accent, fontSize: 11)),
-              ],
-            ),
-          ],
-
-          // 5. Botones de Acción para Administrador
-          if (isDeleted) ...[
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.expense,
-                    side: const BorderSide(color: AppColors.expense),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  ),
-                  onPressed: () => _confirmHardDelete(record),
-                  icon: const Icon(Icons.delete_forever_rounded, size: 14),
-                  label: const Text('Purgar', style: TextStyle(fontSize: 11)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.income,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  ),
-                  onPressed: () => _confirmRestore(record),
-                  icon: const Icon(Icons.restore_from_trash_rounded, size: 14),
-                  label: const Text('Restaurar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ],
+                );
+              }
+            },
+            child: const Text('Archivar'),
+          ),
         ],
       ),
     );
@@ -949,7 +1393,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
           'El registro de "${record.title.isNotEmpty ? record.title : record.category}" por ${CurrencyFormatter.format(record.amount)} volverá a sumarse en los balances familiares y estará visible nuevamente en la pantalla principal.',
           style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
-
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -981,9 +1424,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('¿Purgar permanentemente?'),
+        title: const Text('¿Borrar definitivamente?'),
         content: const Text(
-          'Esta acción eliminará el registro de forma definitiva de la base de datos y no se podrá recuperar de ningún historial.',
+          'Esta acción eliminará el registro y su comprobante permanentemente de la base de datos de Firebase y Cloudinary. No se podrá recuperar.',
           style: TextStyle(color: AppColors.expense, fontSize: 13),
         ),
         actions: [
@@ -995,21 +1438,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.expense),
             onPressed: () async {
               Navigator.pop(ctx);
+
+              if (record.storagePath != null && record.storagePath!.isNotEmpty) {
+                await _storageService.deleteImage(record.storagePath!);
+              }
               await _firestoreService.hardDeleteRecord(record.id);
+
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     backgroundColor: AppColors.expense,
-                    content: Text('Registro purgado de forma definitiva.'),
+                    content: Text('Registro borrado definitivamente.'),
                   ),
                 );
               }
             },
-            child: const Text('Purgar Definitivo'),
+            child: const Text('Borrar Definitivo'),
           ),
         ],
       ),
     );
   }
 }
+
 
