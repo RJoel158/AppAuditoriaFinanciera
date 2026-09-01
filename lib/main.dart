@@ -12,29 +12,27 @@ import 'views/home/home_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 0. Inicializar soporte de idioma español para fechas (intl)
-  await initializeDateFormatting('es', null);
+  // Inicializar formato de fechas
+  try {
+    await initializeDateFormatting('es', null);
+  } catch (_) {}
 
-  // 1. Inicializar servicio de notificaciones push / locales con canal prioritario
-  await NotificationService().initialize();
-
-  // 2. Inicialización de Firebase
-
+  // Inicializar Firebase
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
-    // 2. Configurar persistencia en caché local de Firestore
     FirestoreService.configurePersistence();
-
-    // 3. Inicializar usuarios por defecto en Firestore si está vacío
-    await AuthService().initializeDefaultUsersIfNeeded();
   } catch (e) {
-    debugPrint('Nota de inicialización de Firebase: $e');
+    debugPrint('Firebase init note: $e');
   }
 
-  // 4. Verificar si existe sesión activa
+  // Inicializar notificaciones en segundo plano sin bloquear el arranque
+  NotificationService().initialize().catchError((e) {
+    debugPrint('Notification init note: $e');
+  });
+
+  // Verificar sesión previa de forma asíncrona
   final savedUser = await AuthService().checkSavedSession();
 
   runApp(FamFinanceApp(initialLoggedIn: savedUser != null));
@@ -55,4 +53,5 @@ class FamFinanceApp extends StatelessWidget {
     );
   }
 }
+
 

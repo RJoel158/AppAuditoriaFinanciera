@@ -292,7 +292,11 @@ class AuthService {
       final savedUserId = prefs.getString(_prefUserIdKey);
 
       if (savedUserId != null) {
-        final doc = await _firestore.collection(_usersCollection).doc(savedUserId).get();
+        final doc = await _firestore
+            .collection(_usersCollection)
+            .doc(savedUserId)
+            .get()
+            .timeout(const Duration(milliseconds: 1500));
         if (doc.exists) {
           final user = FamilyUser.fromSnapshot(doc);
           if (user.isActive) {
@@ -304,6 +308,7 @@ class AuthService {
     } catch (_) {}
     return null;
   }
+
 
   /// Cerrar Sesión
   Future<void> logout() async {
