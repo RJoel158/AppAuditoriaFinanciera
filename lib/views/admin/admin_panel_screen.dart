@@ -1,10 +1,15 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../core/constants/app_categories.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../models/family_user.dart';
+import '../../models/financial_record.dart';
 import '../../models/pin_reset_request.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -17,12 +22,18 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
   late final TabController _tabController;
   final AdminService _adminService = AdminService();
   final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
+  String _auditFilter = 'all'; // 'all', 'active', 'deleted'
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
+
 
   @override
   void dispose() {
@@ -356,6 +367,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
                 },
               ),
             ),
+            const Tab(
+              icon: Icon(Icons.history_edu_rounded, size: 20),
+              text: 'Auditoría',
+            ),
           ],
         ),
       ),
@@ -364,16 +379,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
         children: [
           _buildMembersTab(),
           _buildRequestsTab(),
+          _buildAuditTab(),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddMemberDialog,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.person_add_rounded, color: Colors.white),
-        label: const Text('Nuevo Integrante', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton.extended(
+              onPressed: _showAddMemberDialog,
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+              label: const Text('Nuevo Integrante', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          : null,
     );
   }
+
 
   Widget _buildMembersTab() {
     return StreamBuilder<List<FamilyUser>>(
@@ -614,4 +633,383 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
       },
     );
   }
+
+  Widget _buildAuditTab() {
+    return StreamBuilder<List<FinancialRecord>>(
+      stream: _firestoreService.getAuditRecordsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        }
+
+        final allRecords = snapshot.data ?? [];
+        final activeRecords = allRecords.where((r) => !r.isDeleted).toList();
+        final deletedRecords = allRecords.where((r) => r.isDeleted).toList();
+
+        List<FinancialRecord> displayedRecords;
+        if (_auditFilter == 'active') {
+          displayedRecords = activeRecords;
+        } else if (_auditFilter == 'deleted') {
+          displayedRecords = deletedRecords;
+        } else {
+          displayedRecords = allRecords;
+        }
+
+        return Column(
+          children: [
+            // Filtros de Auditoría
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildAuditFilterChip('all', 'Todos (${allRecords.length})', Icons.list_alt_rounded),
+                    const SizedBox(width: 8),
+                    _buildAuditFilterChip('active', '🟢 Activos (${activeRecords.length})', Icons.check_circle_rounded),
+                    const SizedBox(width: 8),
+                    _buildAuditFilterChip('deleted', '🗑️ Eliminados (${deletedRecords.length})', Icons.delete_sweep_rounded),
+                  ],
+                ),
+              ),
+            ),
+
+            if (displayedRecords.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _auditFilter == 'deleted' ? Icons.delete_outline_rounded : Icons.history_rounded,
+                        size: 48,
+                        color: AppColors.textMuted,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _auditFilter == 'deleted'
+                            ? 'No hay registros en la papelera de eliminación lógica.'
+                            : 'No hay registros en el historial.',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: displayedRecords.length,
+                  itemBuilder: (context, index) {
+                    final record = displayedRecords[index];
+                    return _buildAuditRecordCard(record);
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAuditFilterChip(String key, String label, IconData icon) {
+    final isSelected = _auditFilter == key;
+    return ChoiceChip(
+      selected: isSelected,
+      label: Text(label),
+      avatar: Icon(icon, size: 16, color: isSelected ? Colors.white : AppColors.textSecondary),
+      backgroundColor: AppColors.surfaceLight.withAlpha(50),
+      selectedColor: AppColors.primary,
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : AppColors.textSecondary,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontSize: 12,
+      ),
+      onSelected: (_) {
+        setState(() {
+          _auditFilter = key;
+        });
+      },
+    );
+  }
+
+  Widget _buildAuditRecordCard(FinancialRecord record) {
+    final isDeleted = record.isDeleted;
+    final isIncome = record.isIncome;
+    final category = AppCategories.getCategoryById(record.category);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDeleted ? AppColors.expense.withAlpha(100) : AppColors.border,
+          width: isDeleted ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Cabecera con Estado y Monto
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: (isDeleted ? AppColors.expense : (isIncome ? AppColors.income : AppColors.primary)).withAlpha(25),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isDeleted ? Icons.delete_outline_rounded : category.icon,
+                      color: isDeleted ? AppColors.expense : category.color,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        record.title.isNotEmpty ? record.title : category.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: isDeleted ? AppColors.textMuted : AppColors.textPrimary,
+                          decoration: isDeleted ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      Text(
+                        category.name,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${isIncome ? '+' : '-'} ${CurrencyFormatter.format(record.amount)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isDeleted
+                          ? AppColors.textMuted
+                          : (isIncome ? AppColors.income : AppColors.expense),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (isDeleted ? AppColors.expense : AppColors.income).withAlpha(25),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      isDeleted ? 'ELIMINADO' : 'ACTIVO',
+                      style: TextStyle(
+                        color: isDeleted ? AppColors.expense : AppColors.income,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: 8),
+
+          // 2. Trazabilidad: Quién lo creó
+          Row(
+            children: [
+              const Icon(Icons.person_add_alt_rounded, size: 14, color: AppColors.textMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Creado por: ${record.registeredBy} • ${DateFormatter.formatFull(record.createdAt)}',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5),
+                ),
+              ),
+            ],
+          ),
+
+          // 3. Trazabilidad: Quién lo eliminó (si aplica)
+          if (isDeleted) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.expense.withAlpha(20),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.expense.withAlpha(60)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.delete_forever_rounded, size: 15, color: AppColors.expense),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Eliminado por: ${record.deletedBy ?? "Usuario"} • ${record.deletedAt != null ? DateFormatter.formatFull(record.deletedAt!) : "Recientemente"}',
+                      style: const TextStyle(
+                        color: AppColors.expense,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+
+          // 4. Notas y Comprobante
+          if (record.description.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Nota: "${record.description}"',
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
+            ),
+          ],
+
+          if (record.imageUrl != null && record.imageUrl!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: CachedNetworkImage(
+                    imageUrl: record.imageUrl!,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(color: AppColors.surfaceLight, width: 44, height: 44),
+                    errorWidget: (_, __, ___) => const Icon(Icons.receipt_long_rounded, size: 24),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('Comprobante adjunto', style: TextStyle(color: AppColors.accent, fontSize: 11)),
+              ],
+            ),
+          ],
+
+          // 5. Botones de Acción para Administrador
+          if (isDeleted) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.expense,
+                    side: const BorderSide(color: AppColors.expense),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
+                  onPressed: () => _confirmHardDelete(record),
+                  icon: const Icon(Icons.delete_forever_rounded, size: 14),
+                  label: const Text('Purgar', style: TextStyle(fontSize: 11)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.income,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ),
+                  onPressed: () => _confirmRestore(record),
+                  icon: const Icon(Icons.restore_from_trash_rounded, size: 14),
+                  label: const Text('Restaurar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _confirmRestore(FinancialRecord record) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('¿Restaurar movimiento?'),
+        content: Text(
+          'El registro de "${record.title.isNotEmpty ? record.title : record.category}" por ${CurrencyFormatter.format(record.amount)} volverá a sumarse en los balances familiares y estará visible nuevamente en la pantalla principal.',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.income),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _firestoreService.restoreRecord(record.id);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: AppColors.income,
+                    content: Text('Movimiento restaurado exitosamente.'),
+                  ),
+                );
+              }
+            },
+            child: const Text('Restaurar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmHardDelete(FinancialRecord record) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('¿Purgar permanentemente?'),
+        content: const Text(
+          'Esta acción eliminará el registro de forma definitiva de la base de datos y no se podrá recuperar de ningún historial.',
+          style: TextStyle(color: AppColors.expense, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.expense),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _firestoreService.hardDeleteRecord(record.id);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: AppColors.expense,
+                    content: Text('Registro purgado de forma definitiva.'),
+                  ),
+                );
+              }
+            },
+            child: const Text('Purgar Definitivo'),
+          ),
+        ],
+      ),
+    );
+  }
 }
+

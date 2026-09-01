@@ -7,8 +7,10 @@ import '../../../core/constants/app_members.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../models/financial_record.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/firestore_service.dart';
 import '../../../services/storage_service.dart';
+
 
 class RecordDetailSheet extends StatelessWidget {
   final FinancialRecord record;
@@ -426,8 +428,8 @@ class RecordDetailSheet extends StatelessWidget {
         backgroundColor: AppColors.surface,
         title: const Text('¿Eliminar este registro?'),
         content: const Text(
-          'Esta acción borrará la transacción y el comprobante adjunto permanentemente.',
-          style: TextStyle(color: AppColors.textSecondary),
+          'El registro se archivará lógicamente. Dejará de sumarse en los balances y quedará registrado en el historial de auditoría del Administrador.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
@@ -440,10 +442,25 @@ class RecordDetailSheet extends StatelessWidget {
               Navigator.pop(ctx);
               Navigator.pop(context);
 
-              if (record.storagePath != null && record.storagePath!.isNotEmpty) {
-                await storageService.deleteImage(record.storagePath!);
+              final currentUser = AuthService().currentUser;
+              await firestoreService.softDeleteRecord(
+                record.id,
+                deletedBy: currentUser?.displayName ?? currentUser?.alias ?? 'Papá / Admin',
+                deletedByMemberId: currentUser?.id ?? 'admin_user',
+              );
+
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: AppColors.surfaceLight,
+                    content: Text(
+                      'Registro movido a la papelera / historial de auditoría.',
+                      style: TextStyle(color: AppColors.textPrimary),
+                    ),
+                  ),
+                );
               }
-              await firestoreService.deleteRecord(record.id);
             },
             child: const Text('Eliminar'),
           ),
@@ -452,3 +469,4 @@ class RecordDetailSheet extends StatelessWidget {
     );
   }
 }
+
