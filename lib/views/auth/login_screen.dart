@@ -30,35 +30,43 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loadUsersAndInit() async {
-    await _authService.initializeDefaultUsersIfNeeded();
-    final users = await _authService.getActiveUsers();
-
+    // 1. Mostrar de inmediato los usuarios familiares por defecto
+    final initialUsers = _authService.defaultFamilyUsers;
     if (mounted) {
       setState(() {
-        _familyUsers = users;
-        // Seleccionar por defecto el último usuario o el Administrador
-        _selectedUser = users.firstWhere(
+        _familyUsers = initialUsers;
+        _selectedUser = initialUsers.firstWhere(
           (u) => u.isAdmin,
-          orElse: () => users.isNotEmpty ? users.first : _createDefaultAdminUser(),
+          orElse: () => initialUsers.first,
         );
         _isLoadingUsers = false;
       });
+    }
 
-      // Si hay un usuario guardado previamente en el dispositivo, intentar biometría solo para él
+    // 2. Sincronizar en segundo plano con Firestore
+    try {
+      await _authService.initializeDefaultUsersIfNeeded();
+      final users = await _authService.getActiveUsers();
+
+      if (mounted && users.isNotEmpty) {
+        setState(() {
+          _familyUsers = users;
+          _selectedUser = users.firstWhere(
+            (u) => u.alias == _selectedUser?.alias,
+            orElse: () => users.first,
+          );
+        });
+      }
+    } catch (_) {}
+
+    // 3. Si hay un usuario guardado previamente en el dispositivo, intentar biometría
+    if (mounted) {
       _trySavedBiometrics();
     }
   }
 
-  FamilyUser _createDefaultAdminUser() {
-    return FamilyUser(
-      id: 'admin_papa',
-      alias: 'admin',
-      displayName: 'Papá / Admin',
-      role: UserRole.admin,
-      pinHash: '',
-      createdAt: DateTime.now(),
-    );
-  }
+
+
 
   Future<void> _trySavedBiometrics() async {
     try {

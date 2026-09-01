@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/family_user.dart';
 import '../models/pin_reset_request.dart';
@@ -30,14 +32,12 @@ class AuthService {
     return sha256.convert(bytes).toString();
   }
 
-  /// Inicializar y sincronizar usuarios por defecto en Firestore con roles estrictamente separados
-  Future<void> initializeDefaultUsersIfNeeded() async {
-    try {
-      final defaultPin = hashPin('1234');
-      final now = DateTime.now();
-
-      // 1. Administrador Puro (DBA / Gestor)
-      final adminUser = FamilyUser(
+  /// Lista de usuarios familiares por defecto
+  List<FamilyUser> get defaultFamilyUsers {
+    final defaultPin = hashPin('1234');
+    final now = DateTime.now();
+    return [
+      FamilyUser(
         id: 'admin_user',
         alias: 'admin',
         displayName: 'Administrador',
@@ -47,10 +47,8 @@ class AuthService {
         createdAt: now,
         biometricsEnabled: true,
         avatarIcon: 'admin_panel_settings',
-      );
-
-      // 2. Papá (Rol Familiar Independiente)
-      final papaUser = FamilyUser(
+      ),
+      FamilyUser(
         id: 'papa_user',
         alias: 'papa',
         displayName: 'Papá',
@@ -60,10 +58,8 @@ class AuthService {
         createdAt: now,
         biometricsEnabled: true,
         avatarIcon: 'person',
-      );
-
-      // 3. Mamá (Rol Familiar)
-      final mamaUser = FamilyUser(
+      ),
+      FamilyUser(
         id: 'mama_user',
         alias: 'mama',
         displayName: 'Mamá',
@@ -73,10 +69,8 @@ class AuthService {
         createdAt: now,
         biometricsEnabled: true,
         avatarIcon: 'favorite',
-      );
-
-      // 4. Hijo/a (Rol Familiar)
-      final hijoUser = FamilyUser(
+      ),
+      FamilyUser(
         id: 'hijo_user',
         alias: 'hijo',
         displayName: 'Hijo / Hija',
@@ -86,50 +80,29 @@ class AuthService {
         createdAt: now,
         biometricsEnabled: true,
         avatarIcon: 'school',
-      );
+      ),
+    ];
+  }
 
-      final snapshot = await _firestore.collection(_usersCollection).get();
+  /// Inicializar y sincronizar usuarios por defecto en Firestore
+  Future<void> initializeDefaultUsersIfNeeded() async {
+    try {
+      final defaultUsers = defaultFamilyUsers;
+      final snapshot = await _firestore
+          .collection(_usersCollection)
+          .get()
+          .timeout(const Duration(seconds: 4));
 
       if (snapshot.docs.isEmpty) {
         final batch = _firestore.batch();
-        batch.set(_firestore.collection(_usersCollection).doc(adminUser.id), adminUser.toMap());
-        batch.set(_firestore.collection(_usersCollection).doc(papaUser.id), papaUser.toMap());
-        batch.set(_firestore.collection(_usersCollection).doc(mamaUser.id), mamaUser.toMap());
-        batch.set(_firestore.collection(_usersCollection).doc(hijoUser.id), hijoUser.toMap());
-        await batch.commit();
-      } else {
-        // Migración/Limpieza automática: asegurar que Administrador y Papá estén separados en Firestore
-        final batch = _firestore.batch();
-        bool needsCommit = false;
-
-        for (final doc in snapshot.docs) {
-          final data = doc.data();
-          final displayName = data['displayName'] as String? ?? '';
-          final alias = data['alias'] as String? ?? '';
-
-          // Si el usuario anterior era "Papá / Admin", renombrarlo a "Administrador" puro
-          if (displayName.contains('Papá / Admin') || (alias == 'admin' && displayName != 'Administrador')) {
-            batch.update(doc.reference, {
-              'displayName': 'Administrador',
-              'role': 'admin',
-              'avatarIcon': 'admin_panel_settings',
-            });
-            needsCommit = true;
-          }
+        for (final user in defaultUsers) {
+          batch.set(_firestore.collection(_usersCollection).doc(user.id), user.toMap());
         }
-
-        // Verificar si existe el usuario "papa", si no existe, crearlo
-        final papaExists = snapshot.docs.any((d) => (d.data()['alias'] as String?) == 'papa');
-        if (!papaExists) {
-          batch.set(_firestore.collection(_usersCollection).doc(papaUser.id), papaUser.toMap());
-          needsCommit = true;
-        }
-
-        if (needsCommit) {
-          await batch.commit();
-        }
+        await batch.commit().timeout(const Duration(seconds: 4));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('ℹ️ [AuthService] Firestore init offline o pendiente de reglas: $e');
+    }
   }
 
   /// Obtener lista de todos los usuarios activos
@@ -138,26 +111,34 @@ class AuthService {
       final query = await _firestore
           .collection(_usersCollection)
           .where('isActive', isEqualTo: true)
-          .get();
-      return query.docs.map((doc) => FamilyUser.fromSnapshot(doc)).toList();
-    } catch (_) {
-      return [];
-    }
+          .get()
+          .timeout(const Duration(seconds: 3));
+
+      final users = query.docs.map((doc) => FamilyUser.fromSnapshot(doc)).toList();
+      if (users.isNotEmpty) {
+        return users;
+      }
+    } catch (_) {}
+
+    // Fallback instantáneo con los usuarios familiares por defecto
+    return defaultFamilyUsers;
   }
 
   /// Obtener usuario guardado en el dispositivo para biometría
   Future<FamilyUser?> getSavedBiometricUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUserId = prefs.getString(_prefUserIdKey);
-    if (savedUserId != null) {
-      final doc = await _firestore.collection(_usersCollection).doc(savedUserId).get();
-      if (doc.exists) {
-        final user = FamilyUser.fromSnapshot(doc);
-        if (user.isActive) {
-          return user;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUserId = prefs.getString(_prefUserIdKey);
+      if (savedUserId != null) {
+        final doc = await _firestore.collection(_usersCollection).doc(savedUserId).get().timeout(const Duration(seconds: 3));
+        if (doc.exists) {
+          final user = FamilyUser.fromSnapshot(doc);
+          if (user.isActive) {
+            return user;
+          }
         }
       }
-    }
+    } catch (_) {}
     return null;
   }
 
@@ -169,35 +150,55 @@ class AuthService {
     final cleanAlias = alias.trim().toLowerCase();
     final pinHashed = hashPin(pin.trim());
 
-    final query = await _firestore
-        .collection(_usersCollection)
-        .where('alias', isEqualTo: cleanAlias)
-        .limit(1)
-        .get();
+    try {
+      final query = await _firestore
+          .collection(_usersCollection)
+          .where('alias', isEqualTo: cleanAlias)
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 4));
 
-    if (query.docs.isEmpty) {
-      throw Exception('Usuario no encontrado. Verifica el usuario seleccionado.');
+      if (query.docs.isNotEmpty) {
+        final doc = query.docs.first;
+        final user = FamilyUser.fromSnapshot(doc);
+
+        if (!user.isActive) {
+          throw Exception('Esta cuenta ha sido desactivada por el Administrador.');
+        }
+
+        if (user.pinHash != pinHashed) {
+          throw Exception('PIN incorrecto. Intenta de nuevo.');
+        }
+
+        doc.reference.update({
+          'lastLogin': Timestamp.fromDate(DateTime.now()),
+        }).catchError((_) {});
+
+        _currentUser = user.copyWith(lastLogin: DateTime.now());
+        await _saveSession(_currentUser!);
+        return _currentUser!;
+      }
+    } catch (e) {
+      if (e is Exception && e.toString().contains('PIN incorrecto')) {
+        rethrow;
+      }
     }
 
-    final doc = query.docs.first;
-    final user = FamilyUser.fromSnapshot(doc);
+    // Fallback con usuario local predeterminado si Firestore no responde
+    final defaultUser = defaultFamilyUsers.firstWhere(
+      (u) => u.alias.toLowerCase() == cleanAlias,
+      orElse: () => throw Exception('Usuario no encontrado. Selecciona otro perfil.'),
+    );
 
-    if (!user.isActive) {
-      throw Exception('Esta cuenta ha sido desactivada por el Administrador.');
+    if (defaultUser.pinHash != pinHashed) {
+      throw Exception('PIN incorrecto. El PIN por defecto es 1234.');
     }
 
-    if (user.pinHash != pinHashed) {
-      throw Exception('PIN incorrecto. Intenta de nuevo.');
-    }
-
-    await doc.reference.update({
-      'lastLogin': Timestamp.fromDate(DateTime.now()),
-    });
-
-    _currentUser = user.copyWith(lastLogin: DateTime.now());
+    _currentUser = defaultUser.copyWith(lastLogin: DateTime.now());
     await _saveSession(_currentUser!);
     return _currentUser!;
   }
+
 
   /// Autenticación por Biometría (Huella Dactilar)
   Future<FamilyUser?> authenticateWithBiometrics({String? targetAlias}) async {
