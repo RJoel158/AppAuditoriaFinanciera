@@ -41,10 +41,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController.addListener(_onScroll);
 
     // Iniciar escucha en tiempo real de notificaciones para movimientos de otros familiares
-    final currentUserId = _authService.currentUser?.id ?? '';
-    if (currentUserId.isNotEmpty) {
-      NotificationService().startFamilyListener(currentUserId: currentUserId);
+    final currentUser = _authService.currentUser;
+    if (currentUser != null) {
+      NotificationService().startFamilyListener(
+        currentUserId: currentUser.id,
+        currentUserAlias: currentUser.alias,
+        currentUserDisplayName: currentUser.displayName,
+      );
     }
+
   }
 
   @override

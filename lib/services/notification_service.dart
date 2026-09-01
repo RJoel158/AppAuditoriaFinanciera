@@ -73,19 +73,31 @@ class NotificationService {
   }
 
   /// Escucha movimientos en tiempo real en Firestore creados por otros familiares
-  void startFamilyListener({required String currentUserId}) {
+  void startFamilyListener({
+    required String currentUserId,
+    String? currentUserAlias,
+    String? currentUserDisplayName,
+  }) {
     _recordsSubscription?.cancel();
-    _listenerStartTime = DateTime.now().subtract(const Duration(seconds: 5));
-    _notifiedRecordIds.clear();
+    _listenerStartTime = DateTime.now().subtract(const Duration(seconds: 3));
 
     _recordsSubscription = _firestoreService.getRecordsStream(limit: 10).listen(
       (records) {
         for (final record in records) {
-          // Si el registro es nuevo, pertenece a otro usuario y no ha sido notificado aún
+          final regBy = record.registeredBy.toLowerCase();
+          final isSelf = record.memberId == currentUserId ||
+              (currentUserAlias != null && currentUserAlias.isNotEmpty && regBy.contains(currentUserAlias.toLowerCase())) ||
+              (currentUserDisplayName != null && currentUserDisplayName.isNotEmpty && regBy.contains(currentUserDisplayName.toLowerCase()));
+
+          final dedupeKey = record.id.isNotEmpty
+              ? record.id
+              : '${record.amount}_${record.category}_${record.date.millisecondsSinceEpoch}';
+
+          // Solo notificar si fue creado por OTRO miembro y no se ha notificado antes
           if (record.createdAt.isAfter(_listenerStartTime) &&
-              record.memberId != currentUserId &&
-              !_notifiedRecordIds.contains(record.id)) {
-            _notifiedRecordIds.add(record.id);
+              !isSelf &&
+              !_notifiedRecordIds.contains(dedupeKey)) {
+            _notifiedRecordIds.add(dedupeKey);
             showRecordNotification(record: record, isSelf: false);
           }
         }
@@ -108,10 +120,16 @@ class NotificationService {
     required FinancialRecord record,
     bool isSelf = false,
   }) async {
+    final dedupeKey = record.id.isNotEmpty
+        ? record.id
+        : '${record.amount}_${record.category}_${record.date.millisecondsSinceEpoch}';
+    _notifiedRecordIds.add(dedupeKey);
+
     try {
       if (!_isInitialized) {
         await initialize();
       }
+
 
       final isIncome = record.isIncome;
       final typeEmoji = isIncome ? '💰' : '💸';
