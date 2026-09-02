@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/app_lock_wrapper.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
@@ -45,13 +46,16 @@ class FamFinanceApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'FamFinance',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      home: initialLoggedIn ? const HomeScreen() : const LoginScreen(),
+    return AppLockWrapper(
+      child: MaterialApp(
+        title: 'FamFinance',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        home: initialLoggedIn ? const HomeScreen() : const LoginScreen(),
+      ),
     );
   }
 }
+
 
 

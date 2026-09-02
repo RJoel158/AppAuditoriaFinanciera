@@ -11,6 +11,7 @@ import '../ai_advisor/financial_advisor_chat_screen.dart';
 import '../auth/login_screen.dart';
 import '../record/add_record_screen.dart';
 import '../reports/reports_screen.dart';
+import '../savings/savings_goals_screen.dart';
 import 'widgets/balance_header.dart';
 import 'widgets/category_filter_bar.dart';
 import 'widgets/record_detail_sheet.dart';
@@ -28,6 +29,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final StorageService _storageService = StorageService();
   final AuthService _authService = AuthService();
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+
+  // Búsqueda en tiempo real
+  bool _isSearching = false;
+  String _searchQuery = '';
 
   // Paginación y filtros
   int _currentLimit = 15;
@@ -49,15 +55,16 @@ class _HomeScreenState extends State<HomeScreen> {
         currentUserDisplayName: currentUser.displayName,
       );
     }
-
   }
 
   @override
   void dispose() {
     NotificationService().stopFamilyListener();
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
+
 
 
   void _onScroll() {
@@ -126,216 +133,250 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.asset(
-                'assets/images/app_logo.png',
-                width: 28,
-                height: 28,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary, size: 22),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'FamFinance',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-
-        actions: [
-          // 1. Badge Informativo del Usuario Autenticado (Protegido contra cambios sin PIN)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: userColor.withAlpha(25),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: userColor.withAlpha(70)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(userIcon, size: 15, color: userColor),
-                const SizedBox(width: 5),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 80),
-                  child: Text(
-                    currentUser?.displayName.split(' ').first ?? 'Usuario',
-                    style: TextStyle(
-                      color: userColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: 'Buscar por concepto, notas, autor...',
+                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  border: InputBorder.none,
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 18),
+                    onPressed: () {
+                      setState(() {
+                        if (_searchQuery.isNotEmpty) {
+                          _searchQuery = '';
+                          _searchController.clear();
+                        } else {
+                          _isSearching = false;
+                        }
+                      });
+                    },
                   ),
                 ),
-                if (isAdmin) ...[
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(40),
-                      borderRadius: BorderRadius.circular(4),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                  });
+                },
+              )
+            : Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.asset(
+                      'assets/images/app_logo.png',
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary, size: 22),
                     ),
-                    child: const Text(
-                      'ADMIN',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w900,
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'FamFinance',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
-              ],
-            ),
-          ),
+              ),
 
-          // 2. Acceso al Asesor Financiero IA Interactivo
-          IconButton(
-            icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary),
-            tooltip: 'Asesor Familiar IA',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const FinancialAdvisorChatScreen()),
-              );
-            },
-          ),
-
-          // 3. Acceso a Reportes y Estadísticas
-          IconButton(
-            icon: const Icon(Icons.analytics_outlined, color: AppColors.accent),
-            tooltip: 'Reportes y PDF',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ReportsScreen()),
-              );
-            },
-          ),
-
-          // 4. Acceso al Panel de Administración (ESTRICTAMENTE SOLO PARA ADMIN)
-          if (isAdmin)
+        actions: [
+          // Botón Activar Búsqueda
+          if (!_isSearching)
             IconButton(
-              icon: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primary),
-              tooltip: 'Panel de Administración',
+              icon: const Icon(Icons.search_rounded, color: AppColors.textPrimary),
+              tooltip: 'Buscar movimientos',
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AdminPanelScreen()),
-                );
+                setState(() {
+                  _isSearching = true;
+                });
               },
             ),
 
-          // 5. Menú de Opciones
-          PopupMenuButton<String>(
-            color: AppColors.surface,
-            icon: const Icon(Icons.more_vert_rounded),
-            onSelected: (val) {
-              if (val == 'chat') {
+          if (!_isSearching) ...[
+            // 1. Badge Informativo del Usuario Autenticado
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: userColor.withAlpha(25),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: userColor.withAlpha(70)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(userIcon, size: 15, color: userColor),
+                  const SizedBox(width: 5),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 75),
+                    child: Text(
+                      currentUser?.displayName.split(' ').first ?? 'Usuario',
+                      style: TextStyle(
+                        color: userColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isAdmin) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(40),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'ADMIN',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // 2. Acceso al Asesor Financiero IA Interactivo
+            IconButton(
+              icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary),
+              tooltip: 'Asesor Familiar IA',
+              onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const FinancialAdvisorChatScreen()),
                 );
-              } else if (val == 'reports') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ReportsScreen()),
-                );
-              } else if (val == 'sync') {
-                setState(() {
-                  _currentLimit = 15;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Sincronizando registros en tiempo real...'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              } else if (val == 'admin' && isAdmin) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AdminPanelScreen()),
-                );
-              } else if (val == 'logout') {
-                _handleLogout();
-              }
-            },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(
-                value: 'chat',
-                child: Row(
-                  children: [
-                    Icon(Icons.auto_awesome_rounded, size: 18, color: AppColors.primary),
-                    SizedBox(width: 8),
-                    Text('Asesor Financiero IA'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'reports',
-                child: Row(
-                  children: [
-                    Icon(Icons.analytics_rounded, size: 18, color: AppColors.accent),
-                    SizedBox(width: 8),
-                    Text('Reportes & PDF'),
-                  ],
-                ),
-              ),
+              },
+            ),
 
-              if (isAdmin)
+            // 3. Menú de Opciones
+            PopupMenuButton<String>(
+              color: AppColors.surface,
+              icon: const Icon(Icons.more_vert_rounded),
+              onSelected: (val) {
+                if (val == 'savings') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SavingsGoalsScreen()),
+                  );
+                } else if (val == 'chat') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const FinancialAdvisorChatScreen()),
+                  );
+                } else if (val == 'reports') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ReportsScreen()),
+                  );
+                } else if (val == 'sync') {
+                  setState(() {
+                    _currentLimit = 15;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Sincronizando registros en tiempo real...'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                } else if (val == 'admin' && isAdmin) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AdminPanelScreen()),
+                  );
+                } else if (val == 'logout') {
+                  _handleLogout();
+                }
+              },
+              itemBuilder: (ctx) => [
                 const PopupMenuItem(
-                  value: 'admin',
+                  value: 'savings',
                   child: Row(
                     children: [
-                      Icon(Icons.admin_panel_settings_rounded, size: 18, color: AppColors.primary),
+                      Icon(Icons.savings_rounded, size: 18, color: Color(0xFF10B981)),
                       SizedBox(width: 8),
-                      Text('Panel Admin Familiar'),
+                      Text('Metas de Ahorro'),
                     ],
                   ),
                 ),
-              const PopupMenuItem(
-                value: 'sync',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh_rounded, size: 18, color: AppColors.textSecondary),
-                    SizedBox(width: 8),
-                    Text('Sincronizar'),
-                  ],
+                const PopupMenuItem(
+                  value: 'chat',
+                  child: Row(
+                    children: [
+                      Icon(Icons.auto_awesome_rounded, size: 18, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Text('Asesor Financiero IA'),
+                    ],
+                  ),
                 ),
-              ),
+                const PopupMenuItem(
+                  value: 'reports',
+                  child: Row(
+                    children: [
+                      Icon(Icons.analytics_rounded, size: 18, color: AppColors.accent),
+                      SizedBox(width: 8),
+                      Text('Reportes & PDF'),
+                    ],
+                  ),
+                ),
 
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.swap_horiz_rounded, size: 18, color: AppColors.accent),
-                    SizedBox(width: 8),
-                    Text('Cambiar Usuario', style: TextStyle(color: AppColors.accent)),
-                  ],
+                if (isAdmin)
+                  const PopupMenuItem(
+                    value: 'admin',
+                    child: Row(
+                      children: [
+                        Icon(Icons.admin_panel_settings_rounded, size: 18, color: AppColors.primary),
+                        SizedBox(width: 8),
+                        Text('Panel Admin Familiar'),
+                      ],
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: 'sync',
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh_rounded, size: 18, color: AppColors.textSecondary),
+                      SizedBox(width: 8),
+                      Text('Sincronizar'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout_rounded, size: 18, color: AppColors.expense),
-                    SizedBox(width: 8),
-                    Text('Cerrar Sesión', style: TextStyle(color: AppColors.expense)),
-                  ],
+
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      Icon(Icons.swap_horiz_rounded, size: 18, color: AppColors.accent),
+                      SizedBox(width: 8),
+                      Text('Cambiar Usuario', style: TextStyle(color: AppColors.accent)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout_rounded, size: 18, color: AppColors.expense),
+                      SizedBox(width: 8),
+                      Text('Cerrar Sesión', style: TextStyle(color: AppColors.expense)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(width: 4),
         ],
       ),
@@ -361,7 +402,71 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 2. Barra de Filtros
+          // 2. Banner de Acceso Rápido a Metas de Ahorro Familiar
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SavingsGoalsScreen()),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0C2419), Color(0xFF133624)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF10B981).withAlpha(80)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withAlpha(30),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.savings_rounded, color: Color(0xFF10B981), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Metas de Ahorro Familiar',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            Text(
+                              'Planifica vacaciones, emergencias y compras',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF10B981)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 3. Barra de Filtros por Categoría/Tipo
           SliverToBoxAdapter(
             child: CategoryFilterBar(
               selectedType: _selectedType,
@@ -374,16 +479,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 3. Título de sección de registros (Sin desbordamientos)
+          // 4. Título de sección de registros
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Registros y Comprobantes',
-                      style: TextStyle(
+                      _searchQuery.isNotEmpty
+                          ? 'Resultados de "$_searchQuery"'
+                          : 'Registros y Comprobantes',
+                      style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -405,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 4. Lista Reactiva en Tiempo Real con StreamBuilder
+          // 5. Lista Reactiva en Tiempo Real con Búsqueda Inteligente
           StreamBuilder<List<FinancialRecord>>(
             stream: _firestoreService.getRecordsStream(
               limit: _currentLimit,
@@ -445,7 +552,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               }
 
-              final records = snapshot.data ?? [];
+              var records = snapshot.data ?? [];
+
+              // Filtrado en vivo de búsqueda inteligente
+              if (_searchQuery.trim().isNotEmpty) {
+                final query = _searchQuery.trim().toLowerCase();
+                records = records.where((r) {
+                  final titleMatch = r.title.toLowerCase().contains(query);
+                  final descMatch = r.description.toLowerCase().contains(query);
+                  final catMatch = r.category.toLowerCase().contains(query);
+                  final authorMatch = r.registeredBy.toLowerCase().contains(query);
+                  final amountMatch = r.amount.toString().contains(query);
+                  return titleMatch || descMatch || catMatch || authorMatch || amountMatch;
+                }).toList();
+              }
+
 
               if (records.isEmpty) {
                 return SliverFillRemaining(
