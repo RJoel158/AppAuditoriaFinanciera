@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../models/financial_record.dart';
 import '../models/siat_invoice.dart';
+
 
 
 class SiatInvoiceService {
@@ -189,7 +192,7 @@ class SiatInvoiceService {
     return invoice;
   }
 
-  /// 3. Descargar el archivo PDF oficial del SIAT (Rollo térmico oficial o Documento)
+  /// 3. Descargar el archivo PDF oficial del SIAT (Rollo térmico) o Generar Comprobante PDF Oficial
   Future<File?> downloadOrGenerateInvoicePdf({
     required SiatInvoice invoice,
   }) async {
@@ -232,12 +235,156 @@ class SiatInvoiceService {
           }
         }
       } catch (e) {
-        debugPrint('Error descargando representación gráfica de SIAT: $e');
+        debugPrint('Descarga de representación gráfica de SIAT falló, generando comprobante local: $e');
       }
     }
 
-    return null;
+    // Fallback garantizado: Generar documento PDF oficial con todos los datos y lista de productos
+    return await _generateLocalVoucherPdf(invoice);
   }
+
+  /// Generador de comprobante oficial digital en PDF para auditoría familiar
+  Future<File> _generateLocalVoucherPdf(SiatInvoice invoice) async {
+    final pdf = pw.Document();
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        margin: const pw.EdgeInsets.all(10),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                invoice.vendorName.toUpperCase(),
+                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+                textAlign: pw.TextAlign.center,
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text('NIT: ${invoice.nit}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey800)),
+              pw.Text('FACTURA N° ${invoice.invoiceNumber}',
+                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.teal800)),
+              pw.Divider(thickness: 0.8, color: PdfColors.grey400),
+              pw.SizedBox(height: 3),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Fecha:', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                  pw.Text(dateFormat.format(invoice.date), style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+              if (invoice.buyerNit != null && invoice.buyerNit!.isNotEmpty) ...[
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('NIT/CI Cliente:', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                    pw.Text(invoice.buyerNit!, style: const pw.TextStyle(fontSize: 8)),
+                  ],
+                ),
+              ],
+              pw.SizedBox(height: 6),
+              pw.Divider(thickness: 0.8, color: PdfColors.grey400),
+
+              // Tabla de productos si existen
+              if (invoice.items.isNotEmpty) ...[
+                pw.Align(
+                  alignment: pw.Alignment.centerLeft,
+                  child: pw.Text('DETALLE DE PRODUCTOS:', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.SizedBox(height: 3),
+                pw.Table(
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(1.2),
+                    1: const pw.FlexColumnWidth(3.5),
+                    2: const pw.FlexColumnWidth(1.8),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text('CANT', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text('DESCRIPCIÓN', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text('SUBTOTAL', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right),
+                        ),
+                      ],
+                    ),
+                    ...invoice.items.map(
+                      (item) => pw.TableRow(
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 1),
+                            child: pw.Text(item.quantity.toStringAsFixed(item.quantity.truncateToDouble() == item.quantity ? 0 : 2), style: const pw.TextStyle(fontSize: 7)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 1),
+                            child: pw.Text(item.description, style: const pw.TextStyle(fontSize: 7)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 1),
+                            child: pw.Text('Bs ${item.subtotal.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.right),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 6),
+                pw.Divider(thickness: 0.8, color: PdfColors.grey400),
+              ],
+
+              // Total
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('TOTAL BS:', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Bs ${invoice.amount.toStringAsFixed(2)}',
+                        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 6),
+
+              if (invoice.cuf.isNotEmpty) ...[
+                pw.Text('CUF:', style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey600)),
+                pw.Text(
+                  invoice.cuf,
+                  style: const pw.TextStyle(fontSize: 5, color: PdfColors.grey700),
+                  textAlign: pw.TextAlign.center,
+                  maxLines: 2,
+                ),
+              ],
+              pw.SizedBox(height: 6),
+              pw.Text('ESTE DOCUMENTO ES UNA REPRESENTACIÓN GRÁFICA DE FACTURA SIAT',
+                  style: const pw.TextStyle(fontSize: 5, color: PdfColors.grey600), textAlign: pw.TextAlign.center),
+            ],
+          );
+        },
+      ),
+    );
+
+    final tempDir = await getTemporaryDirectory();
+    final fileName = 'Factura_SIAT_${invoice.invoiceNumber}_${invoice.nit}.pdf';
+    final file = File('${tempDir.path}/$fileName');
+    await file.writeAsBytes(await pdf.save());
+    return file;
+  }
+
 
   /// 4. Deducir categoría con precisión de 3 niveles: Actividad Económica SIN (CIIU) + Productos + Razón Social
   static String inferCategory({

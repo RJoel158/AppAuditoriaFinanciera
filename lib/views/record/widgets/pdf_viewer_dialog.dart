@@ -58,22 +58,26 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
         final file = File(widget.localFilePath!);
         if (await file.exists()) {
           final bytes = await file.readAsBytes();
-          setState(() {
-            _pdfBytes = bytes;
-            _isLoading = false;
-          });
-          return;
+          if (bytes.isNotEmpty) {
+            setState(() {
+              _pdfBytes = bytes;
+              _isLoading = false;
+            });
+            return;
+          }
         }
       }
 
       // 2. URL o Base64
       if (widget.pdfUrl != null && widget.pdfUrl!.isNotEmpty) {
-        final url = widget.pdfUrl!;
+        final url = widget.pdfUrl!.trim();
 
         if (url.startsWith('data:')) {
           // Data URL Base64
-          final base64String = url.split(',').last;
-          final bytes = base64Decode(base64String);
+          final commaIdx = url.indexOf(',');
+          final base64String = commaIdx != -1 ? url.substring(commaIdx + 1).trim() : url;
+          final normalized = base64.normalize(base64String);
+          final bytes = base64Decode(normalized);
           setState(() {
             _pdfBytes = bytes;
             _isLoading = false;
@@ -95,16 +99,18 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
       }
 
       setState(() {
-        _errorMessage = 'No se pudo cargar el archivo PDF del comprobante.';
+        _errorMessage = 'No se encontró el contenido del archivo PDF.';
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('Error cargando PDF: $e');
       setState(() {
-        _errorMessage = 'Error al abrir el documento PDF: $e';
+        _errorMessage = 'Error al procesar el documento PDF: $e';
         _isLoading = false;
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
