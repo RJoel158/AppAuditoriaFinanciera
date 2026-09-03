@@ -138,81 +138,79 @@ class _LockScreenState extends State<_LockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: AppColors.background,
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withAlpha(25),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.lock_rounded, size: 50, color: AppColors.primary),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(25),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'FamFinance Bloqueado',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Hola, ${widget.user.displayName}. Ingresa tu PIN para continuar.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                ),
-                const SizedBox(height: 24),
+                child: const Icon(Icons.lock_rounded, size: 50, color: AppColors.primary),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'FamFinance Bloqueado',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Hola, ${widget.user.displayName}. Ingresa tu PIN para continuar.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
 
-                // Indicador de Puntos PIN
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, (index) {
-                    final filled = index < _enteredPin.length;
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: filled ? AppColors.primary : AppColors.surfaceLight.withAlpha(100),
-                        border: Border.all(color: filled ? AppColors.primary : AppColors.border),
-                      ),
-                    );
-                  }),
-                ),
+              // Indicador de Puntos PIN
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(4, (index) {
+                  final filled = index < _enteredPin.length;
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: filled ? AppColors.primary : AppColors.surfaceLight.withAlpha(100),
+                      border: Border.all(color: filled ? AppColors.primary : AppColors.border),
+                    ),
+                  );
+                }),
+              ),
 
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_errorMessage!, style: const TextStyle(color: AppColors.expense, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
-
-                const Spacer(),
-
-                // Teclado Numérico
-                _buildKeypad(),
-                const SizedBox(height: 16),
-
-                // Botón Reintentar Huella
-                TextButton.icon(
-                  onPressed: _isAuthenticating ? null : _attemptBiometric,
-                  icon: const Icon(Icons.fingerprint_rounded, color: AppColors.primary),
-                  label: const Text('Desbloquear con Huella', style: TextStyle(color: AppColors.primary)),
-                ),
-                const Spacer(),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(_errorMessage!, style: const TextStyle(color: AppColors.expense, fontSize: 12, fontWeight: FontWeight.bold)),
               ],
-            ),
+
+              const Spacer(),
+
+              // Teclado Numérico
+              _buildKeypad(),
+              const SizedBox(height: 16),
+
+              // Botón Reintentar Huella
+              TextButton.icon(
+                onPressed: _isAuthenticating ? null : _attemptBiometric,
+                icon: const Icon(Icons.fingerprint_rounded, color: AppColors.primary),
+                label: const Text('Desbloquear con Huella', style: TextStyle(color: AppColors.primary)),
+              ),
+              const Spacer(),
+            ],
           ),
         ),
       ),
     );
   }
+
 
   Widget _buildKeypad() {
     return Column(

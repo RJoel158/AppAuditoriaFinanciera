@@ -172,6 +172,25 @@ class RecordTile extends StatelessWidget {
   Widget _buildLeadingImageOrIcon(CategoryItem category) {
     if (record.imageUrl != null && record.imageUrl!.isNotEmpty) {
       final img = record.imageUrl!;
+      final lower = img.toLowerCase();
+      final isPdf = lower.contains('.pdf') || lower.contains('application/pdf') || lower.contains('/pdf') || lower.contains('factura_siat');
+
+      if (isPdf) {
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.expense.withAlpha(25),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.expense.withAlpha(60),
+              width: 1,
+            ),
+          ),
+          child: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.expense, size: 22),
+        );
+      }
+
       if (img.startsWith('data:image')) {
         try {
           final base64Content = img.split(',').last;
@@ -181,10 +200,18 @@ class RecordTile extends StatelessWidget {
             child: SizedBox(
               width: 44,
               height: 44,
-              child: Image.memory(bytes, fit: BoxFit.cover),
+              child: Image.memory(
+                bytes,
+                fit: BoxFit.cover,
+                cacheWidth: 88,
+                cacheHeight: 88,
+                errorBuilder: (_, __, ___) => _buildFallbackCategoryIcon(category),
+              ),
             ),
           );
-        } catch (_) {}
+        } catch (_) {
+          return _buildFallbackCategoryIcon(category);
+        }
       }
 
       return ClipRRect(
@@ -195,28 +222,31 @@ class RecordTile extends StatelessWidget {
           child: CachedNetworkImage(
             imageUrl: img,
             fit: BoxFit.cover,
+            memCacheWidth: 88,
+            memCacheHeight: 88,
             placeholder: (context, url) => Container(
               color: AppColors.surfaceLight,
               child: const Center(
                 child: SizedBox(
-                  width: 18,
-                  height: 18,
+                  width: 14,
+                  height: 14,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2,
+                    strokeWidth: 1.5,
                     color: AppColors.primary,
                   ),
                 ),
               ),
             ),
-            errorWidget: (context, url, error) => Container(
-              color: category.color.withAlpha(30),
-              child: Icon(category.icon, color: category.color, size: 22),
-            ),
+            errorWidget: (context, url, error) => _buildFallbackCategoryIcon(category),
           ),
         ),
       );
     }
 
+    return _buildFallbackCategoryIcon(category);
+  }
+
+  Widget _buildFallbackCategoryIcon(CategoryItem category) {
     return Container(
       width: 44,
       height: 44,
@@ -231,4 +261,5 @@ class RecordTile extends StatelessWidget {
       child: Icon(category.icon, color: category.color, size: 22),
     );
   }
+
 }

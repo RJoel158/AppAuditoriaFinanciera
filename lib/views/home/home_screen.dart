@@ -452,6 +452,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   (context, index) {
                     final record = records[index];
                     return RecordTile(
+                      key: ValueKey(record.id),
                       record: record,
                       onTap: () => _openRecordDetail(record),
                     );
@@ -459,6 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   childCount: records.length,
                 ),
               );
+
             },
           ),
 
