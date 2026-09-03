@@ -125,6 +125,8 @@ class ImageUploadCard extends StatelessWidget {
       );
     }
 
+    final isPdf = selectedImageFile!.path.toLowerCase().endsWith('.pdf');
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -135,18 +137,50 @@ class ImageUploadCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Previsualización y botón borrar
+          // Previsualización (PDF o Imagen) y botón borrar
           Stack(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  selectedImageFile!,
-                  height: 180,
+              if (isPdf)
+                Container(
+                  height: 120,
                   width: double.infinity,
-                  fit: BoxFit.cover,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight.withAlpha(50),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary.withAlpha(60)),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.picture_as_pdf_rounded, size: 48, color: AppColors.expense),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          selectedImageFile!.path.split(Platform.pathSeparator).last,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Factura Electrónica SIAT (PDF)',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    selectedImageFile!,
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
                 ),
-              ),
               Positioned(
                 top: 8,
                 right: 8,
@@ -174,6 +208,7 @@ class ImageUploadCard extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 10),
 
           // Estadísticas de Compresión

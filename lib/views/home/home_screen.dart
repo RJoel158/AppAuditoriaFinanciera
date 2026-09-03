@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/family_user.dart';
 import '../../models/financial_record.dart';
+import '../../models/siat_invoice.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/notification_service.dart';
@@ -10,8 +11,10 @@ import '../admin/admin_panel_screen.dart';
 import '../ai_advisor/financial_advisor_chat_screen.dart';
 import '../auth/login_screen.dart';
 import '../record/add_record_screen.dart';
+import '../record/siat_qr_scanner_screen.dart';
 import '../reports/reports_screen.dart';
 import '../savings/savings_goals_screen.dart';
+
 import 'widgets/balance_header.dart';
 import 'widgets/category_filter_bar.dart';
 import 'widgets/record_detail_sheet.dart';
@@ -122,6 +125,18 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return const Color(0xFF8B5CF6);
     }
+  }  Future<void> _openSiatScanner() async {
+    final invoice = await Navigator.push<SiatInvoice>(
+      context,
+      MaterialPageRoute(builder: (context) => const SiatQrScannerScreen()),
+    );
+    if (!mounted || invoice == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddRecordScreen(initialSiatInvoice: invoice),
+      ),
+    );
   }
 
   @override
@@ -187,6 +202,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
         actions: [
+          // Botón Escanear Factura QR (SIAT)
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
+              tooltip: 'Escanear Factura QR (SIAT)',
+              onPressed: _openSiatScanner,
+            ),
+
           // Botón Activar Búsqueda
           if (!_isSearching)
             IconButton(
@@ -265,7 +288,9 @@ class _HomeScreenState extends State<HomeScreen> {
               color: AppColors.surface,
               icon: const Icon(Icons.more_vert_rounded),
               onSelected: (val) {
-                if (val == 'savings') {
+                if (val == 'scan_siat') {
+                  _openSiatScanner();
+                } else if (val == 'savings') {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const SavingsGoalsScreen()),
@@ -301,7 +326,18 @@ class _HomeScreenState extends State<HomeScreen> {
               },
               itemBuilder: (ctx) => [
                 const PopupMenuItem(
+                  value: 'scan_siat',
+                  child: Row(
+                    children: [
+                      Icon(Icons.qr_code_scanner_rounded, size: 18, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Text('Escanear Factura (SIAT)'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
                   value: 'savings',
+
                   child: Row(
                     children: [
                       Icon(Icons.savings_rounded, size: 18, color: Color(0xFF10B981)),
@@ -320,6 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
+
                 const PopupMenuItem(
                   value: 'reports',
                   child: Row(

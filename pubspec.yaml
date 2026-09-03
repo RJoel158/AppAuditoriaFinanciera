@@ -47,8 +47,13 @@ dependencies:
   # Notificaciones Push / Locales enriquecidas
   flutter_local_notifications: ^18.0.1
 
+  # Escaneo QR & Parseo HTML Facturación SIAT Bolivia
+  mobile_scanner: ^6.0.4
+  html: ^0.15.4
+
   # Iconos & UI
   cupertino_icons: ^1.0.8
+
 
 
 

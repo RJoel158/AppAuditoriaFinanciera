@@ -8,20 +8,23 @@ import '../../core/constants/app_members.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/image_compressor.dart';
 import '../../models/financial_record.dart';
+import '../../models/siat_invoice.dart';
 import '../../services/auth_service.dart';
 import '../../services/duplicate_checker_service.dart';
 import '../../services/exchange_rate_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
-
-
+import 'siat_qr_scanner_screen.dart';
 import 'widgets/category_dropdown.dart';
+
 import 'widgets/image_upload_card.dart';
 import 'widgets/member_dropdown.dart';
 import 'widgets/transaction_type_toggle.dart';
 
 class AddRecordScreen extends StatefulWidget {
-  const AddRecordScreen({super.key});
+  final SiatInvoice? initialSiatInvoice;
+
+  const AddRecordScreen({super.key, this.initialSiatInvoice});
 
   @override
   State<AddRecordScreen> createState() => _AddRecordScreenState();
@@ -58,7 +61,34 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     super.initState();
     _loadExchangeRate();
     _initLoggedInUser();
+    if (widget.initialSiatInvoice != null) {
+      _applySiatInvoice(widget.initialSiatInvoice!);
+    }
   }
+
+  void _applySiatInvoice(SiatInvoice result) {
+    _titleController.text = result.vendorName;
+    if (result.amount > 0) {
+      _amountController.text = result.amount.toStringAsFixed(2);
+    }
+    _selectedCurrency = 'BOB';
+    _selectedDate = result.date;
+    _selectedType = RecordType.expense;
+    _selectedCategory = result.suggestedCategory;
+
+    final auditInfo = StringBuffer();
+    auditInfo.writeln('Factura N°: ${result.invoiceNumber}');
+    if (result.nit.isNotEmpty) auditInfo.writeln('NIT Emisor: ${result.nit}');
+    if (result.cuf.isNotEmpty) auditInfo.writeln('CUF: ${result.cuf}');
+    if (result.buyerNit != null && result.buyerNit!.isNotEmpty) auditInfo.writeln('NIT Comprador: ${result.buyerNit}');
+    _descriptionController.text = auditInfo.toString().trim();
+
+    if (result.downloadedPdfPath != null) {
+      _selectedImage = File(result.downloadedPdfPath!);
+      _compressionResult = null;
+    }
+  }
+
 
   void _initLoggedInUser() {
     final authUser = _authService.currentUser;
@@ -163,7 +193,30 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     }
   }
 
+  /// Escanear factura electrónica SIAT de Bolivia y autocompletar el formulario
+  Future<void> _scanSiatQrInvoice() async {
+    final result = await Navigator.push<SiatInvoice>(
+      context,
+      MaterialPageRoute(builder: (context) => const SiatQrScannerScreen()),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _applySiatInvoice(result);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.primary,
+          content: Text('¡Factura de "${result.vendorName}" importada y autocompletada!'),
+        ),
+      );
+    }
+  }
+
+
   Future<void> _submitForm({bool forceSave = false}) async {
+
     // 1. Bloqueo inmediato anti-doble clic
     if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
@@ -323,6 +376,13 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nuevo Registro Financiero'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
+            tooltip: 'Escanear Factura QR (SIAT)',
+            onPressed: _isSaving ? null : _scanSiatQrInvoice,
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -331,12 +391,69 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
+                // Banner Destacado: Escanear Factura QR (SIAT Bolivia)
+                InkWell(
+                  onTap: _isSaving ? null : _scanSiatQrInvoice,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0C2419), Color(0xFF133624)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.primary.withAlpha(90)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withAlpha(30),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Escanear Factura QR (SIAT Bolivia)',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Autocompleta monto, comercio, NIT y adjunta comprobante',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primary),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // 1. Selector de Tipo (Ingreso / Egreso)
                 TransactionTypeToggle(
                   selectedType: _selectedType,
                   onChanged: _isSaving ? (_) {} : _onTypeChanged,
                 ),
                 const SizedBox(height: 18),
+
 
                 // 2. Campo de Monto con Selector Integrado (USD / BOB)
                 TextFormField(
