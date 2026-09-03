@@ -67,27 +67,34 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
   }
 
   void _applySiatInvoice(SiatInvoice result) {
+    // 1. Concepto limpio con Razón Social del comercio (ej. IC Norte S.A.)
     _titleController.text = result.vendorName;
+
+    // 2. Monto exacto en Bolivianos
     if (result.amount > 0) {
       _amountController.text = result.amount.toStringAsFixed(2);
     }
     _selectedCurrency = 'BOB';
+
+    // 3. Fecha de emisión
     _selectedDate = result.date;
+
+    // 4. Tipo y Categoría deducida
     _selectedType = RecordType.expense;
     _selectedCategory = result.suggestedCategory;
 
-    final auditInfo = StringBuffer();
-    auditInfo.writeln('Factura N°: ${result.invoiceNumber}');
-    if (result.nit.isNotEmpty) auditInfo.writeln('NIT Emisor: ${result.nit}');
-    if (result.cuf.isNotEmpty) auditInfo.writeln('CUF: ${result.cuf}');
-    if (result.buyerNit != null && result.buyerNit!.isNotEmpty) auditInfo.writeln('NIT Comprador: ${result.buyerNit}');
-    _descriptionController.text = auditInfo.toString().trim();
+    // 5. Notas descriptivas y amigables para el usuario (sin hashes técnicos)
+    _descriptionController.text = result.readableNotes ?? 'Compra en ${result.vendorName} • Factura N° ${result.invoiceNumber}';
 
+    // 6. Asignar archivo PDF del comprobante oficial
     if (result.downloadedPdfPath != null) {
-      _selectedImage = File(result.downloadedPdfPath!);
-      _compressionResult = null;
+      setState(() {
+        _selectedImage = File(result.downloadedPdfPath!);
+        _compressionResult = null;
+      });
     }
   }
+
 
 
   void _initLoggedInUser() {

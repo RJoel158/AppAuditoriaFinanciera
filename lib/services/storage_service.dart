@@ -23,20 +23,26 @@ class StorageService {
     required File imageFile,
     Function(double progress)? onProgress,
   }) async {
-    // 1. Comprimir la imagen antes de subirla
-    final compression = await ImageCompressorUtil.compressImage(
-      imageFile,
-      quality: 70,
-      minWidth: 1280,
-      minHeight: 1280,
-    );
+    final isPdf = imageFile.path.toLowerCase().endsWith('.pdf');
+
+    // 1. Comprimir si es imagen (no aplica para PDF)
+    CompressionResult? compression;
+    if (!isPdf) {
+      compression = await ImageCompressorUtil.compressImage(
+        imageFile,
+        quality: 70,
+        minWidth: 1280,
+        minHeight: 1280,
+      );
+    }
 
     final fileToUpload = compression?.file ?? imageFile;
+    final fileLength = await imageFile.length();
     final fileStats = compression ??
         CompressionResult(
           file: imageFile,
-          originalBytes: await imageFile.length(),
-          compressedBytes: await imageFile.length(),
+          originalBytes: fileLength,
+          compressedBytes: fileLength,
         );
 
     final cloudName = AppConfig.cloudinaryCloudName;
@@ -47,7 +53,8 @@ class StorageService {
       debugPrint('Usando modo local/base64 temporal optimizado.');
       final bytes = await fileToUpload.readAsBytes();
       final base64String = base64Encode(bytes);
-      final dataUrl = 'data:image/jpeg;base64,$base64String';
+      final mime = isPdf ? 'application/pdf' : 'image/jpeg';
+      final dataUrl = 'data:$mime;base64,$base64String';
 
       return UploadResult(
         downloadUrl: dataUrl,
@@ -55,6 +62,7 @@ class StorageService {
         compressionStats: fileStats,
       );
     }
+
 
     // 3. Subir a Cloudinary (Plan Gratuito Permanente)
     try {

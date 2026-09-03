@@ -12,6 +12,7 @@ class SiatInvoice {
   final String? authorizationNumber;
   final String? controlCode;
   final String? downloadedPdfPath;
+  final String? readableNotes;
 
   SiatInvoice({
     required this.nit,
@@ -27,6 +28,7 @@ class SiatInvoice {
     this.authorizationNumber,
     this.controlCode,
     this.downloadedPdfPath,
+    this.readableNotes,
   });
 
   SiatInvoice copyWith({
@@ -43,6 +45,7 @@ class SiatInvoice {
     String? authorizationNumber,
     String? controlCode,
     String? downloadedPdfPath,
+    String? readableNotes,
   }) {
     return SiatInvoice(
       nit: nit ?? this.nit,
@@ -58,6 +61,7 @@ class SiatInvoice {
       authorizationNumber: authorizationNumber ?? this.authorizationNumber,
       controlCode: controlCode ?? this.controlCode,
       downloadedPdfPath: downloadedPdfPath ?? this.downloadedPdfPath,
+      readableNotes: readableNotes ?? this.readableNotes,
     );
   }
 
@@ -76,6 +80,7 @@ class SiatInvoice {
       'authorizationNumber': authorizationNumber,
       'controlCode': controlCode,
       'downloadedPdfPath': downloadedPdfPath,
+      'readableNotes': readableNotes,
     };
   }
 }

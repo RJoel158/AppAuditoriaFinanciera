@@ -22,11 +22,10 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
   final SiatInvoiceService _siatService = SiatInvoiceService();
   bool _isProcessing = false;
   bool _isTorchOn = false;
-  String _processingStatus = 'Apunta la cámara al código QR de la factura';
+  String _processingStatus = 'Enfoca el código QR de la factura';
 
   late AnimationController _animController;
   late Animation<double> _scanAnimation;
-
 
   @override
   void initState() {
@@ -51,7 +50,7 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
 
     setState(() {
       _isProcessing = true;
-      _processingStatus = 'Factura detectada. Parseando datos SIAT...';
+      _processingStatus = 'Factura detectada. Extrayendo datos del SIAT...';
     });
 
     HapticFeedback.mediumImpact();
@@ -63,46 +62,38 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
       if (mounted) {
         setState(() {
           _isProcessing = false;
-          _processingStatus = 'No es un código QR válido de Facturación de Bolivia';
+          _processingStatus = 'Código no reconocido. Intenta enfocar nuevamente.';
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: AppColors.expense,
-            content: Text('El código QR no corresponde a una factura SIAT / Impuestos de Bolivia.'),
+            content: Text('El código QR no corresponde a una factura SIAT de Bolivia.'),
           ),
         );
       }
       return;
     }
 
-    // 2. Consultar web SIAT para obtener Razón Social y enlace al PDF
+    // 2. Consultar web SIAT y enriquecer con Gemini AI
     setState(() {
-      _processingStatus = 'Consultando datos del comercio en el portal SIAT...';
+      _processingStatus = 'Identificando comercio y montos con IA...';
     });
 
     final fullInvoice = await _siatService.fetchInvoiceDetails(partialInvoice);
 
-    // 3. Descargar PDF si existe enlace
-    if (fullInvoice.pdfUrl != null && fullInvoice.pdfUrl!.isNotEmpty) {
-      setState(() {
-        _processingStatus = 'Descargando comprobante PDF de la factura...';
-      });
+    // 3. Descargar PDF del SIAT o Generar Comprobante Oficial Digital
+    setState(() {
+      _processingStatus = 'Adjuntando comprobante oficial de la factura...';
+    });
 
-      final pdfFile = await _siatService.downloadInvoicePdf(
-        pdfUrl: fullInvoice.pdfUrl!,
-        invoiceNumber: fullInvoice.invoiceNumber,
-      );
-
-      if (mounted) {
-        final finalInvoice = fullInvoice.copyWith(downloadedPdfPath: pdfFile?.path);
-        Navigator.pop(context, finalInvoice);
-        return;
-      }
-    }
+    final pdfFile = await _siatService.downloadOrGenerateInvoicePdf(
+      invoice: fullInvoice,
+    );
 
     if (mounted) {
-      Navigator.pop(context, fullInvoice);
+      final finalInvoice = fullInvoice.copyWith(downloadedPdfPath: pdfFile?.path);
+      Navigator.pop(context, finalInvoice);
     }
   }
 
@@ -163,7 +154,13 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    final scanSize = MediaQuery.of(context).size.width * 0.72;
+    final screenSize = MediaQuery.of(context).size;
+    final scanBoxSize = screenSize.width * 0.72;
+    final scanWindow = Rect.fromCenter(
+      center: Offset(screenSize.width / 2, screenSize.height * 0.42),
+      width: scanBoxSize,
+      height: scanBoxSize,
+    );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -188,9 +185,9 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
             onPressed: () => _scannerController.switchCamera(),
           ),
         ],
-
       ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
           // 1. Visor de Cámara MobileScanner
           MobileScanner(
@@ -207,96 +204,75 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
             },
           ),
 
-          // 2. Máscara Oscura Alrededor del Visor
-          ColorFiltered(
-            colorFilter: ColorFilter.mode(
-              Colors.black.withAlpha(160),
-              BlendMode.srcOut,
+          // 2. Máscara Oscura 100% Transparente en el Centro (CustomPainter)
+          CustomPaint(
+            painter: _ScannerHolePainter(
+              scanWindow: scanWindow,
+              borderRadius: 20,
             ),
+          ),
+
+          // 3. Marco Visual con Esquinas Verdes y Línea Láser Animada
+          Positioned(
+            left: scanWindow.left,
+            top: scanWindow.top,
+            width: scanWindow.width,
+            height: scanWindow.height,
             child: Stack(
-              fit: StackFit.expand,
               children: [
+                // Borde Verde Neón
                 Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    backgroundBlendMode: BlendMode.dstOut,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.primary, width: 2.5),
                   ),
                 ),
-                Center(
-                  child: Container(
-                    width: scanSize,
-                    height: scanSize,
+
+                // Línea Láser de Escaneo
+                if (!_isProcessing)
+                  AnimatedBuilder(
+                    animation: _scanAnimation,
+                    builder: (context, child) {
+                      return Positioned(
+                        top: _scanAnimation.value * (scanBoxSize - 16),
+                        left: 8,
+                        right: 8,
+                        child: Container(
+                          height: 3,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Colors.transparent, AppColors.primary, Colors.transparent],
+                            ),
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withAlpha(200),
+                                blurRadius: 10,
+                                spreadRadius: 3,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                // Overlay de Carga durante consulta
+                if (_isProcessing)
+                  Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
+                      color: Colors.black.withAlpha(200),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(color: AppColors.primary),
                     ),
                   ),
-                ),
               ],
             ),
           ),
 
-          // 3. Marco Visual Cuadrado con Esquinas y Línea Animada
-          Center(
-            child: SizedBox(
-              width: scanSize,
-              height: scanSize,
-              child: Stack(
-                children: [
-                  // Bordes / Esquinas
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.primary, width: 2.5),
-                    ),
-                  ),
-
-                  // Línea Verde Animada de Escaneo
-                  if (!_isProcessing)
-                    AnimatedBuilder(
-                      animation: _scanAnimation,
-                      builder: (context, child) {
-                        return Positioned(
-                          top: _scanAnimation.value * (scanSize - 20),
-                          left: 12,
-                          right: 12,
-                          child: Container(
-                            height: 3,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Colors.transparent, AppColors.primary, Colors.transparent],
-                              ),
-                              borderRadius: BorderRadius.circular(2),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primary.withAlpha(150),
-                                  blurRadius: 8,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                  // Overlay de Carga si está procesando
-                  if (_isProcessing)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(color: AppColors.primary),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // 4. Panel Inferior con Instrucciones y Botón Manual
+          // 4. Panel Inferior con Estado y Botón de Enlace Manual
           Positioned(
             bottom: 30,
             left: 20,
@@ -306,7 +282,7 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.surface.withAlpha(220),
+                    color: AppColors.surface.withAlpha(230),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppColors.border),
                   ),
@@ -320,7 +296,7 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -328,10 +304,10 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 TextButton.icon(
                   style: TextButton.styleFrom(
-                    backgroundColor: AppColors.surfaceLight.withAlpha(80),
+                    backgroundColor: AppColors.surfaceLight.withAlpha(90),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -349,4 +325,29 @@ class _SiatQrScannerScreenState extends State<SiatQrScannerScreen> with SingleTi
       ),
     );
   }
+}
+
+/// Painter que oscurece toda la pantalla EXCEPTO el rectángulo central que queda 100% transparente
+class _ScannerHolePainter extends CustomPainter {
+  final Rect scanWindow;
+  final double borderRadius;
+
+  _ScannerHolePainter({required this.scanWindow, this.borderRadius = 20});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final backgroundPaint = Paint()
+      ..color = Colors.black.withAlpha(160)
+      ..style = PaintingStyle.fill;
+
+    final backgroundPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    final cutoutPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(scanWindow, Radius.circular(borderRadius)));
+
+    final overlayPath = Path.combine(PathOperation.difference, backgroundPath, cutoutPath);
+    canvas.drawPath(overlayPath, backgroundPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
