@@ -55,12 +55,15 @@ class RecordTile extends StatelessWidget {
                         record.title,
                         style: const TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 15,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w600,
+                          height: 1.2,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
+                        softWrap: true,
                         overflow: TextOverflow.ellipsis,
                       ),
+
                       const SizedBox(height: 5),
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,

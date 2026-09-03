@@ -595,11 +595,11 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
                 const SizedBox(height: 16),
 
-                // 3. Título / Concepto (Con límite de 50 caracteres)
+                // 3. Título / Concepto (Ampliado a 120 caracteres para razones sociales largas)
                 TextFormField(
                   controller: _titleController,
                   enabled: !_isSaving,
-                  maxLength: 50,
+                  maxLength: 120,
                   decoration: const InputDecoration(
                     labelText: 'Concepto / Título *',
                     hintText: 'Ej. Compra semanal en supermercado',
@@ -607,6 +607,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                     contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     counterStyle: TextStyle(color: AppColors.textMuted, fontSize: 11),
                   ),
+
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) {
                       return 'El concepto es obligatorio';

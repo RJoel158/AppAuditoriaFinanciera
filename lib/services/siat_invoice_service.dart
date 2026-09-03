@@ -161,11 +161,20 @@ class SiatInvoiceService {
               ? productosSummary
               : 'Compra en $razonSocial • Factura N° ${invoice.invoiceNumber}';
 
+          // Deducir categoría precisa usando Razón Social, Código de Actividad Económica y Productos
+          final primerActividad = productos.isNotEmpty ? productos.first['actividadEconomica']?.toString() : null;
+          final descripciones = productos.map((p) => p['descripcion']?.toString() ?? '').join(' ');
+          final categoriaOptima = inferCategory(
+            vendorName: razonSocial,
+            actividadEconomica: primerActividad,
+            productDescriptions: descripciones,
+          );
+
           return invoice.copyWith(
             vendorName: razonSocial.trim(),
             amount: montoTotal,
             date: invoiceDate,
-            suggestedCategory: inferCategory(razonSocial),
+            suggestedCategory: categoriaOptima,
             readableNotes: cleanNotes,
             buyerNit: obj['numeroDocumento']?.toString(),
           );
@@ -228,11 +237,58 @@ class SiatInvoiceService {
     return null;
   }
 
-  /// 4. Deducir categoría por palabras clave de comercios en Bolivia
-  static String inferCategory(String vendorName) {
+  /// 4. Deducir categoría con precisión de 3 niveles: Actividad Económica SIN (CIIU) + Productos + Razón Social
+  static String inferCategory({
+    required String vendorName,
+    String? actividadEconomica,
+    String? productDescriptions,
+  }) {
+    final act = actividadEconomica ?? '';
+    final prod = (productDescriptions ?? '').toLowerCase();
     final v = vendorName.toLowerCase();
 
-    // Salud y Farmacia
+    // Nivel 1: Clasificador Oficial de Actividades Económicas de Bolivia (SIN / CIIU)
+    if (act.isNotEmpty) {
+      if (act.startsWith('56') || act.startsWith('4711') || act.startsWith('4721') || act.startsWith('10')) {
+        return 'cat_food'; // Restaurantes, Fast Food, Supermercados, Elaboración de Alimentos
+      }
+      if (act.startsWith('86') || act.startsWith('4772') || act.startsWith('21')) {
+        return 'cat_health'; // Hospitales, Consultas Médicas, Farmacias
+      }
+      if (act.startsWith('49') || act.startsWith('50') || act.startsWith('51') || act.startsWith('4730') || act.startsWith('52')) {
+        return 'cat_transport'; // Transporte terrestre, aéreo, surtidores de gasolina
+      }
+      if (act.startsWith('35') || act.startsWith('36') || act.startsWith('37') || act.startsWith('61')) {
+        return 'cat_services'; // Energía Eléctrica, Agua, Telecomunicaciones
+      }
+      if (act.startsWith('85')) {
+        return 'cat_education'; // Colegios, Universidades, Institutos
+      }
+      if (act.startsWith('90') || act.startsWith('93') || act.startsWith('59')) {
+        return 'cat_entertainment'; // Cine, espectáculos, entretenimiento
+      }
+      if (act.startsWith('4771') || act.startsWith('4773') || act.startsWith('4759')) {
+        return 'cat_shopping'; // Prendas de vestir, calzados, bazar
+      }
+    }
+
+    // Nivel 2: Palabras clave de productos comprados
+    if (prod.isNotEmpty) {
+      if (prod.contains('farma') || prod.contains('medic') || prod.contains('jarabe') || prod.contains('comprim') || prod.contains('capsul') || prod.contains('inyect')) {
+        return 'cat_health';
+      }
+      if (prod.contains('gasolina') || prod.contains('diesel') || prod.contains('gnv') || prod.contains('pasaje') || prod.contains('vuelo')) {
+        return 'cat_transport';
+      }
+      if (prod.contains('hamburguesa') || prod.contains('cono') || prod.contains('helado') || prod.contains('combo') || prod.contains('pollo') || prod.contains('carne') || prod.contains('leche') || prod.contains('arroz') || prod.contains('pan')) {
+        return 'cat_food';
+      }
+      if (prod.contains('matricula') || prod.contains('pension') || prod.contains('cuaderno') || prod.contains('libro')) {
+        return 'cat_education';
+      }
+    }
+
+    // Nivel 3: Razón Social / Nombre Comercial
     if (v.contains('farma') ||
         v.contains('farmacia') ||
         v.contains('salud') ||
@@ -245,7 +301,6 @@ class SiatInvoiceService {
       return 'cat_health';
     }
 
-    // Supermercado y Alimentación / Restaurantes
     if (v.contains('foods') ||
         v.contains('bolivian foods') ||
         v.contains('hipermaxi') ||
@@ -270,7 +325,6 @@ class SiatInvoiceService {
       return 'cat_food';
     }
 
-    // Transporte y Combustible
     if (v.contains('ypfb') ||
         v.contains('surtidor') ||
         v.contains('gasolina') ||
@@ -281,7 +335,6 @@ class SiatInvoiceService {
       return 'cat_transport';
     }
 
-    // Servicios Básicos
     if (v.contains('cre') ||
         v.contains('saguapac') ||
         v.contains('delapaz') ||
@@ -295,7 +348,6 @@ class SiatInvoiceService {
       return 'cat_services';
     }
 
-    // Educación
     if (v.contains('colegio') ||
         v.contains('universidad') ||
         v.contains('univalle') ||
@@ -305,7 +357,6 @@ class SiatInvoiceService {
       return 'cat_education';
     }
 
-    // Entretenimiento
     if (v.contains('cine') ||
         v.contains('center') ||
         v.contains('multicine') ||
@@ -317,6 +368,7 @@ class SiatInvoiceService {
 
     return 'cat_food';
   }
+
 
   DateTime? _parseFlexibleDate(String input) {
     final clean = input.trim();

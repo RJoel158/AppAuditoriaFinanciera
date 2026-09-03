@@ -68,95 +68,86 @@ class RecordDetailSheet extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Cabecera Responsiva: Icono + Título + Monto
+                  // 1. Fila Superior: Categoría (con icono) y Monto
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Icono de categoría
+                      // Badge de Categoría
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: category.color.withAlpha(30),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: category.color.withAlpha(60)),
                         ),
-                        child: Icon(category.icon, color: category.color, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // Título y Categoría (Flexible)
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
+                            Icon(category.icon, color: category.color, size: 16),
+                            const SizedBox(width: 6),
                             Text(
                               category.name,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
+                              style: TextStyle(
+                                color: category.color,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              record.title,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 17,
                                 fontWeight: FontWeight.bold,
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
 
-                      const SizedBox(width: 8),
-
                       // Monto en Bs + Detalle en USD si aplica
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            FittedBox(
-                              alignment: Alignment.centerRight,
-                              fit: BoxFit.scaleDown,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${isIncome ? '+' : '-'}${CurrencyFormatter.format(record.amount)}',
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          if (record.currency == 'USD')
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withAlpha(25),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
                               child: Text(
-                                '${isIncome ? '+' : '-'}${CurrencyFormatter.format(record.amount)}',
-                                style: TextStyle(
-                                  color: color,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
+                                '${record.originalAmount.toStringAsFixed(2)} USD',
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                            if (record.currency == 'USD')
-                              Container(
-                                margin: const EdgeInsets.only(top: 3),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.accent.withAlpha(25),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  '${record.originalAmount.toStringAsFixed(2)} USD',
-                                  style: const TextStyle(
-                                    color: AppColors.accent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
+
+                  // 2. Título / Concepto Completo con Word-Wrap Total (Sin truncar)
+                  Text(
+                    record.title,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      height: 1.3,
+                    ),
+                    softWrap: true,
+                  ),
+                  const SizedBox(height: 16),
                   const Divider(color: AppColors.border),
                   const SizedBox(height: 14),
+
 
                   // 2. Metadatos de Auditoría (Fecha y Miembro)
                   _buildDetailRow(
