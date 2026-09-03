@@ -76,30 +76,36 @@ class RecordDetailSheet extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Badge de Categoría
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: category.color.withAlpha(30),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: category.color.withAlpha(60)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(category.icon, color: category.color, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              category.name,
-                              style: TextStyle(
-                                color: category.color,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                      // Badge de Categoría (Flexible sin desbordamiento)
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: category.color.withAlpha(30),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: category.color.withAlpha(60)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(category.icon, color: category.color, size: 16),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  category.name,
+                                  style: TextStyle(
+                                    color: category.color,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
 
                       // Monto en Bs + Detalle en USD si aplica
                       Column(
@@ -109,10 +115,11 @@ class RecordDetailSheet extends StatelessWidget {
                             '${isIncome ? '+' : '-'}${CurrencyFormatter.format(record.amount)}',
                             style: TextStyle(
                               color: color,
-                              fontSize: 20,
+                              fontSize: 19,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
+
                           if (record.currency == 'USD')
                             Container(
                               margin: const EdgeInsets.only(top: 2),
