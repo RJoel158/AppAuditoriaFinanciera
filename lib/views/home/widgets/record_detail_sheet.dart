@@ -357,7 +357,9 @@ class RecordDetailSheet extends StatelessWidget {
                 context,
                 pdfUrl: imgUrl,
                 title: record.title,
+                record: record,
               ),
+
             ),
           ],
         ),
