@@ -39,11 +39,14 @@ class SiatInvoiceService {
   SiatInvoice? _parseSiatUrl(String urlString) {
     try {
       final uri = Uri.parse(urlString);
-      final params = uri.queryParameters;
+      final params = <String, String>{};
+      uri.queryParameters.forEach((key, value) {
+        params[key.toLowerCase()] = value;
+      });
 
-      final nit = params['nit'] ?? params['p_nit'] ?? params['Nit'] ?? '';
-      final cuf = params['cuf'] ?? params['p_cuf'] ?? params['Cuf'] ?? '';
-      final numero = params['numero'] ?? params['nro'] ?? params['nroFactura'] ?? params['p_numero'] ?? '';
+      final nit = params['nit'] ?? params['p_nit'] ?? '';
+      final cuf = params['cuf'] ?? params['p_cuf'] ?? '';
+      final numero = params['numero'] ?? params['nro'] ?? params['nrofactura'] ?? params['p_numero'] ?? '';
       final importeStr = params['importe'] ?? params['monto'] ?? params['total'] ?? params['p_importe'] ?? '0';
       final fechaStr = params['fecha'] ?? params['p_fecha'] ?? '';
 
@@ -54,9 +57,9 @@ class SiatInvoiceService {
       }
 
       return SiatInvoice(
-        nit: nit,
-        cuf: cuf,
-        invoiceNumber: numero,
+        nit: nit.trim(),
+        cuf: cuf.trim(),
+        invoiceNumber: numero.trim(),
         amount: amount,
         date: date,
         vendorName: 'Consultando SIAT...',
@@ -98,7 +101,6 @@ class SiatInvoiceService {
         buyerNit: buyerNit,
         rawQrUrl: text,
         suggestedCategory: 'cat_food',
-        readableNotes: 'Factura N° $numero • NIT: $nit',
       );
     } catch (e) {
       debugPrint('Error parseando formato pipe: $e');
@@ -106,7 +108,7 @@ class SiatInvoiceService {
     }
   }
 
-  /// 2. Consultar directamente el API REST Oficial de SIAT de Impuestos Nacionales de Bolivia
+  /// 2. Consultar API REST Oficial del SIAT de Bolivia
   Future<SiatInvoice> fetchInvoiceDetails(SiatInvoice invoice) async {
     final nitNum = int.tryParse(invoice.nit);
     final nroNum = int.tryParse(invoice.invoiceNumber);
@@ -116,7 +118,6 @@ class SiatInvoiceService {
     }
 
     try {
-      // Petición HTTP PUT a la API de consulta de factura oficial del SIN
       final response = await _client.put(
         Uri.parse(_consultaFacturaEndpoint),
         headers: {
@@ -128,7 +129,7 @@ class SiatInvoiceService {
         },
         body: jsonEncode({
           'nitEmisor': nitNum,
-          'cuf': invoice.cuf,
+          'cuf': invoice.cuf.trim(),
           'numeroFactura': nroNum,
         }),
       ).timeout(const Duration(seconds: 12));
@@ -138,22 +139,18 @@ class SiatInvoiceService {
         if (data['transaccion'] == true && data['objeto'] != null) {
           final obj = data['objeto'] as Map<String, dynamic>;
 
-          // Razón Social real del comercio
           final razonSocial = obj['razonSocialEmisor'] as String? ?? invoice.vendorName;
 
-          // Monto total real en Bolivianos
           final montoTotal = (obj['montoTotal'] as num?)?.toDouble() ??
               (obj['montoTotalMoneda'] as num?)?.toDouble() ??
               invoice.amount;
 
-          // Fecha y hora exacta de emisión
           DateTime invoiceDate = invoice.date;
           if (obj['fechaEmision'] != null) {
             final parsed = DateTime.tryParse(obj['fechaEmision'].toString());
             if (parsed != null) invoiceDate = parsed;
           }
 
-          // Desglose de productos estructurado
           final productos = obj['listaDetalle'] as List<dynamic>? ?? [];
           final parsedItems = productos.map<InvoiceItem>((p) {
             return InvoiceItem(
@@ -164,7 +161,6 @@ class SiatInvoiceService {
             );
           }).toList();
 
-          // Deducir categoría precisa usando Razón Social, Código de Actividad Económica y Productos
           final primerActividad = productos.isNotEmpty ? productos.first['actividadEconomica']?.toString() : null;
           final descripciones = productos.map((p) => p['descripcion']?.toString() ?? '').join(' ');
           final categoriaOptima = inferCategory(
@@ -173,6 +169,8 @@ class SiatInvoiceService {
             productDescriptions: descripciones,
           );
 
+          final confirmedCuf = obj['cuf']?.toString() ?? invoice.cuf;
+
           return invoice.copyWith(
             vendorName: razonSocial.trim(),
             amount: montoTotal,
@@ -180,9 +178,9 @@ class SiatInvoiceService {
             suggestedCategory: categoriaOptima,
             readableNotes: 'Compra en ${razonSocial.trim()} • Factura N° ${invoice.invoiceNumber}',
             buyerNit: obj['numeroDocumento']?.toString(),
+            cuf: confirmedCuf.trim(),
             items: parsedItems,
           );
-
         }
       }
     } catch (e) {
@@ -192,54 +190,58 @@ class SiatInvoiceService {
     return invoice;
   }
 
-  /// 3. Descargar el archivo PDF oficial del SIAT (Rollo térmico) o Generar Comprobante PDF Oficial
+  /// 3. Descargar el archivo PDF oficial emitido por Impuestos Nacionales de Bolivia (SIAT)
   Future<File?> downloadOrGenerateInvoicePdf({
     required SiatInvoice invoice,
   }) async {
     final nitNum = int.tryParse(invoice.nit);
     final nroNum = int.tryParse(invoice.invoiceNumber);
+    final cleanCuf = invoice.cuf.trim();
 
-    if (nitNum != null && nroNum != null && invoice.cuf.isNotEmpty) {
-      try {
-        // Petición HTTP PUT al endpoint de representación gráfica oficial de SIAT
-        final response = await _client.put(
-          Uri.parse(_representacionGraficaEndpoint),
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json, text/plain, */*',
-            'Origin': 'https://siat.impuestos.gob.bo',
-            'Referer': 'https://siat.impuestos.gob.bo/',
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
-          },
-          body: jsonEncode({
-            'nit': nitNum,
-            'cuf': invoice.cuf,
-            'numeroFactura': nroNum,
-            'tamanio': 1, // 1 = Formato Rollo Oficial del SIAT
-          }),
-        ).timeout(const Duration(seconds: 15));
+    if (nitNum != null && nroNum != null && cleanCuf.isNotEmpty) {
+      // Intentar primero Formato 1 (Rollo) y luego Formato 2 (Hoja Completa) del SIAT Oficial
+      for (final tamanio in [1, 2]) {
+        try {
+          final response = await _client.put(
+            Uri.parse(_representacionGraficaEndpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json, text/plain, */*',
+              'Origin': 'https://siat.impuestos.gob.bo',
+              'Referer': 'https://siat.impuestos.gob.bo/',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            },
+            body: jsonEncode({
+              'nit': nitNum,
+              'cuf': cleanCuf,
+              'numeroFactura': nroNum,
+              'tamanio': tamanio,
+            }),
+          ).timeout(const Duration(seconds: 15));
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body) as Map<String, dynamic>;
-          if (data['transaccion'] == true && data['representacionGrafica'] != null) {
-            final base64Pdf = data['representacionGrafica'] as String;
-            if (base64Pdf.isNotEmpty) {
-              final pdfBytes = base64Decode(base64Pdf);
-              final tempDir = await getTemporaryDirectory();
-              final fileName = 'Factura_SIAT_${invoice.invoiceNumber}_${invoice.nit}.pdf';
-              final file = File('${tempDir.path}/$fileName');
-              await file.writeAsBytes(pdfBytes);
-              debugPrint('PDF Oficial del SIAT descargado y guardado: ${file.path} (${pdfBytes.length} bytes)');
-              return file;
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            if (data['transaccion'] == true && data['representacionGrafica'] != null) {
+              final base64Pdf = data['representacionGrafica'] as String;
+              if (base64Pdf.isNotEmpty) {
+                final pdfBytes = base64Decode(base64Pdf.trim());
+                final tempDir = await getTemporaryDirectory();
+                final fileName = 'Factura_Oficial_SIAT_${invoice.invoiceNumber}_${invoice.nit}.pdf';
+                final file = File('${tempDir.path}/$fileName');
+                await file.writeAsBytes(pdfBytes);
+                debugPrint('✅ PDF Oficial de Impuestos Nacionales (SIAT) descargado con éxito: ${file.path} (${pdfBytes.length} bytes)');
+                return file;
+              }
             }
           }
+        } catch (e) {
+          debugPrint('Intento tamaño $tamanio de representación gráfica SIAT falló: $e');
         }
-      } catch (e) {
-        debugPrint('Descarga de representación gráfica de SIAT falló, generando comprobante local: $e');
       }
     }
 
-    // Fallback garantizado: Generar documento PDF oficial con todos los datos y lista de productos
+    // Si el SIAT se encuentra caído o inaccesible, generar comprobante oficial de respaldo
+    debugPrint('Generando comprobante digital de respaldo...');
     return await _generateLocalVoucherPdf(invoice);
   }
 
