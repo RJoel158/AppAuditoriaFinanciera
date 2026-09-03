@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import '../models/financial_record.dart';
 import '../models/siat_invoice.dart';
+
 
 class SiatInvoiceService {
   final http.Client _client;
@@ -148,18 +150,16 @@ class SiatInvoiceService {
             if (parsed != null) invoiceDate = parsed;
           }
 
-          // Desglose de productos comprados para notas amigables
+          // Desglose de productos estructurado
           final productos = obj['listaDetalle'] as List<dynamic>? ?? [];
-          final productosSummary = productos.map((p) {
-            final cant = p['cantidad'];
-            final desc = p['descripcion'] ?? 'Ítem';
-            final sub = p['subTotal'];
-            return '$cant x $desc (Bs $sub)';
-          }).join(', ');
-
-          final cleanNotes = productosSummary.isNotEmpty
-              ? productosSummary
-              : 'Compra en $razonSocial • Factura N° ${invoice.invoiceNumber}';
+          final parsedItems = productos.map<InvoiceItem>((p) {
+            return InvoiceItem(
+              description: p['descripcion']?.toString() ?? 'Ítem',
+              quantity: (p['cantidad'] as num?)?.toDouble() ?? 1.0,
+              unitPrice: (p['precioUnitario'] as num?)?.toDouble() ?? 0.0,
+              subtotal: (p['subTotal'] as num?)?.toDouble() ?? 0.0,
+            );
+          }).toList();
 
           // Deducir categoría precisa usando Razón Social, Código de Actividad Económica y Productos
           final primerActividad = productos.isNotEmpty ? productos.first['actividadEconomica']?.toString() : null;
@@ -175,9 +175,11 @@ class SiatInvoiceService {
             amount: montoTotal,
             date: invoiceDate,
             suggestedCategory: categoriaOptima,
-            readableNotes: cleanNotes,
+            readableNotes: 'Compra en ${razonSocial.trim()} • Factura N° ${invoice.invoiceNumber}',
             buyerNit: obj['numeroDocumento']?.toString(),
+            items: parsedItems,
           );
+
         }
       }
     } catch (e) {

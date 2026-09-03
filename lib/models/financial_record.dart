@@ -15,6 +15,34 @@ enum RecordType {
   String get label => this == RecordType.income ? 'Ingreso' : 'Egreso';
 }
 
+class InvoiceItem {
+  final String description;
+  final double quantity;
+  final double unitPrice;
+  final double subtotal;
+
+  InvoiceItem({
+    required this.description,
+    required this.quantity,
+    required this.unitPrice,
+    required this.subtotal,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'description': description,
+    'quantity': quantity,
+    'unitPrice': unitPrice,
+    'subtotal': subtotal,
+  };
+
+  factory InvoiceItem.fromMap(Map<String, dynamic> map) => InvoiceItem(
+    description: map['description']?.toString() ?? '',
+    quantity: (map['quantity'] as num?)?.toDouble() ?? 1.0,
+    unitPrice: (map['unitPrice'] as num?)?.toDouble() ?? 0.0,
+    subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
+  );
+}
+
 class FinancialRecord {
   final String id;
   final String title;
@@ -31,6 +59,7 @@ class FinancialRecord {
   final DateTime createdAt;
   final String registeredBy;
   final String memberId;
+  final List<InvoiceItem>? items;
 
   // Campos de Auditoría & Eliminación Lógica
   final bool isDeleted;
@@ -54,6 +83,7 @@ class FinancialRecord {
     required this.createdAt,
     this.registeredBy = 'Papá / Admin',
     this.memberId = 'admin_papa',
+    this.items,
     this.isDeleted = false,
     this.deletedAt,
     this.deletedBy,
@@ -79,6 +109,7 @@ class FinancialRecord {
     DateTime? createdAt,
     String? registeredBy,
     String? memberId,
+    List<InvoiceItem>? items,
     bool? isDeleted,
     DateTime? deletedAt,
     String? deletedBy,
@@ -100,6 +131,7 @@ class FinancialRecord {
       createdAt: createdAt ?? this.createdAt,
       registeredBy: registeredBy ?? this.registeredBy,
       memberId: memberId ?? this.memberId,
+      items: items ?? this.items,
       isDeleted: isDeleted ?? this.isDeleted,
       deletedAt: deletedAt ?? this.deletedAt,
       deletedBy: deletedBy ?? this.deletedBy,
@@ -123,6 +155,7 @@ class FinancialRecord {
       'createdAt': Timestamp.fromDate(createdAt),
       'registeredBy': registeredBy,
       'memberId': memberId,
+      'items': items?.map((i) => i.toMap()).toList(),
       'isDeleted': isDeleted,
       'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
       'deletedBy': deletedBy,
@@ -133,6 +166,14 @@ class FinancialRecord {
   factory FinancialRecord.fromSnapshot(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     final amountVal = (data['amount'] as num?)?.toDouble() ?? 0.0;
+    
+    List<InvoiceItem>? parsedItems;
+    if (data['items'] != null && data['items'] is List) {
+      parsedItems = (data['items'] as List)
+          .map((item) => InvoiceItem.fromMap(item as Map<String, dynamic>))
+          .toList();
+    }
+
     return FinancialRecord(
       id: doc.id,
       title: data['title'] as String? ?? 'Sin concepto',
@@ -149,6 +190,7 @@ class FinancialRecord {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       registeredBy: data['registeredBy'] as String? ?? 'Papá / Admin',
       memberId: data['memberId'] as String? ?? 'admin_papa',
+      items: parsedItems,
       isDeleted: data['isDeleted'] as bool? ?? false,
       deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
       deletedBy: data['deletedBy'] as String?,

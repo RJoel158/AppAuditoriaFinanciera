@@ -16,8 +16,8 @@ import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
 import 'siat_qr_scanner_screen.dart';
 import 'widgets/category_dropdown.dart';
-
 import 'widgets/image_upload_card.dart';
+import 'widgets/invoice_products_table.dart';
 import 'widgets/member_dropdown.dart';
 import 'widgets/transaction_type_toggle.dart';
 
@@ -55,6 +55,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
   bool _isCompressing = false;
   bool _isSaving = false;
   double _uploadProgress = 0.0;
+  List<InvoiceItem> _invoiceItems = [];
 
   @override
   void initState() {
@@ -83,17 +84,17 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     _selectedType = RecordType.expense;
     _selectedCategory = result.suggestedCategory;
 
-    // 5. Notas descriptivas y amigables para el usuario (sin hashes técnicos)
-    _descriptionController.text = result.readableNotes ?? 'Compra en ${result.vendorName} • Factura N° ${result.invoiceNumber}';
-
-    // 6. Asignar archivo PDF del comprobante oficial
-    if (result.downloadedPdfPath != null) {
-      setState(() {
+    // 5. Desglose estructurado de ítems (se muestra en tabla, sin ensuciar las notas)
+    setState(() {
+      _invoiceItems = List.from(result.items);
+      _descriptionController.text = ''; // Notas limpias para el usuario
+      if (result.downloadedPdfPath != null) {
         _selectedImage = File(result.downloadedPdfPath!);
         _compressionResult = null;
-      });
-    }
+      }
+    });
   }
+
 
 
 
@@ -342,7 +343,9 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
         createdAt: DateTime.now(),
         registeredBy: _selectedMember.name,
         memberId: _selectedMember.id,
+        items: _invoiceItems.isNotEmpty ? _invoiceItems : null,
       );
+
 
       // Guardar en Firestore
       await _firestoreService.addRecord(newRecord);
@@ -768,22 +771,30 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                   onImageSelected: _isSaving ? (_) {} : _handleImageSelected,
                   onRemoveImage: _isSaving ? () {} : _handleRemoveImage,
                 ),
+
+                // 7. Tabla Detallada de Productos Facturados (si existen)
+                if (_invoiceItems.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  InvoiceProductsTable(items: _invoiceItems),
+                ],
+
                 const SizedBox(height: 14),
 
-                // 7. Notas adicionales / Descripción (Con límite de 250 caracteres)
+                // 8. Notas adicionales / Observaciones
                 TextFormField(
                   controller: _descriptionController,
                   enabled: !_isSaving,
-                  maxLength: 250,
-                  maxLines: 3,
+                  maxLength: 500,
+                  maxLines: 2,
                   decoration: const InputDecoration(
                     labelText: 'Notas adicionales (Opcional)',
-                    hintText: 'Detalles de la auditoría, observaciones...',
+                    hintText: 'Observaciones personales, detalles extra...',
                     alignLabelWithHint: true,
                     contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     counterStyle: TextStyle(color: AppColors.textMuted, fontSize: 11),
                   ),
                 ),
+
                 const SizedBox(height: 20),
 
                 // 8. Botón de Guardado con Protección Anti Doble Click

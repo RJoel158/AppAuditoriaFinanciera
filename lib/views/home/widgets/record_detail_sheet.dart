@@ -10,6 +10,9 @@ import '../../../models/financial_record.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/firestore_service.dart';
 import '../../../services/storage_service.dart';
+import '../../record/widgets/invoice_products_table.dart';
+import '../../record/widgets/pdf_viewer_dialog.dart';
+
 
 
 class RecordDetailSheet extends StatelessWidget {
@@ -190,8 +193,15 @@ class RecordDetailSheet extends StatelessWidget {
                     ],
                   ),
 
-                  // 3. Notas / Descripción
-                  if (record.description.isNotEmpty) ...[
+                  // 3. Tabla Detallada de Productos Facturados (si existen)
+                  if (record.items != null && record.items!.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    InvoiceProductsTable(items: record.items!),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // 4. Notas / Descripción (solo si contiene texto)
+                  if (record.description.trim().isNotEmpty) ...[
                     const SizedBox(height: 16),
                     const Text(
                       'Notas / Descripción:',
@@ -221,7 +231,7 @@ class RecordDetailSheet extends StatelessWidget {
                     ),
                   ],
 
-                  // 4. Sección Comprobante Adjunto (Con soporte para Zoom Pantalla Completa)
+                  // 5. Sección Comprobante Adjunto (PDF o Imagen)
                   if (record.imageUrl != null && record.imageUrl!.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     Row(
@@ -235,33 +245,19 @@ class RecordDetailSheet extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: () => _openFullscreenViewer(context, record.imageUrl!),
-                          icon: const Icon(Icons.zoom_in_rounded, size: 16, color: AppColors.accent),
-                          label: const Text(
-                            'Ver con Zoom',
-                            style: TextStyle(fontSize: 12, color: AppColors.accent),
+                        if (!_isPdfUrl(record.imageUrl!))
+                          TextButton.icon(
+                            onPressed: () => _openFullscreenViewer(context, record.imageUrl!),
+                            icon: const Icon(Icons.zoom_in_rounded, size: 16, color: AppColors.accent),
+                            label: const Text(
+                              'Ver con Zoom',
+                              style: TextStyle(fontSize: 12, color: AppColors.accent),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: () => _openFullscreenViewer(context, record.imageUrl!),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          constraints: const BoxConstraints(maxHeight: 280),
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            border: Border.all(color: AppColors.border),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: _buildReceiptViewer(record.imageUrl!),
-                        ),
-                      ),
-                    ),
+                    _buildReceiptViewer(context, record.imageUrl!),
                   ],
 
                   const SizedBox(height: 24),
@@ -314,42 +310,110 @@ class RecordDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptViewer(String imgUrl) {
+  bool _isPdfUrl(String url) {
+    final u = url.toLowerCase();
+    return u.contains('application/pdf') ||
+        u.endsWith('.pdf') ||
+        u.contains('/pdf') ||
+        u.contains('factura_siat') ||
+        u.contains('.pdf?');
+  }
+
+  Widget _buildReceiptViewer(BuildContext context, String imgUrl) {
+    // 1. Si el comprobante es un documento PDF
+    if (_isPdfUrl(imgUrl)) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight.withAlpha(50),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.primary.withAlpha(80), width: 1.2),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.picture_as_pdf_rounded, size: 50, color: AppColors.expense),
+            const SizedBox(height: 10),
+            const Text(
+              'Factura Electrónica SIAT (PDF)',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Comprobante Tributario Oficial de Bolivia',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              icon: const Icon(Icons.visibility_rounded, size: 18),
+              label: const Text('Ver / Abrir Documento PDF', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => PdfViewerDialog.show(
+                context,
+                pdfUrl: imgUrl,
+                title: record.title,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 2. Si es una imagen en Base64
     if (imgUrl.startsWith('data:image')) {
       try {
         final base64Content = imgUrl.split(',').last;
         final bytes = base64Decode(base64Content);
-        return Image.memory(bytes, fit: BoxFit.contain);
+        return GestureDetector(
+          onTap: () => _openFullscreenViewer(context, imgUrl),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.memory(bytes, fit: BoxFit.contain),
+          ),
+        );
       } catch (_) {}
     }
 
-    return CachedNetworkImage(
-      imageUrl: imgUrl,
-      fit: BoxFit.contain,
-      placeholder: (context, url) => const SizedBox(
-        height: 180,
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
-      ),
-      errorWidget: (context, url, error) => const SizedBox(
-        height: 140,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.broken_image_outlined, color: AppColors.expense, size: 40),
-              SizedBox(height: 8),
-              Text(
-                'No se pudo cargar la imagen del comprobante',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+    // 3. Imagen remota
+    return GestureDetector(
+      onTap: () => _openFullscreenViewer(context, imgUrl),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: CachedNetworkImage(
+          imageUrl: imgUrl,
+          fit: BoxFit.contain,
+          placeholder: (context, url) => const SizedBox(
+            height: 180,
+            child: Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          ),
+          errorWidget: (context, url, error) => const SizedBox(
+            height: 140,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.broken_image_outlined, color: AppColors.expense, size: 40),
+                  SizedBox(height: 8),
+                  Text(
+                    'No se pudo cargar la imagen del comprobante',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
 
   void _openFullscreenViewer(BuildContext context, String imgUrl) {
     Navigator.push(
@@ -371,9 +435,10 @@ class RecordDetailSheet extends StatelessWidget {
               boundaryMargin: const EdgeInsets.all(20),
               minScale: 0.8,
               maxScale: 5.0,
-              child: _buildReceiptViewer(imgUrl),
+              child: _buildReceiptViewer(ctx, imgUrl),
             ),
           ),
+
         ),
       ),
     );

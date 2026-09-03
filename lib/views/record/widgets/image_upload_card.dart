@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/image_compressor.dart';
+import 'pdf_viewer_dialog.dart';
+
 
 class ImageUploadCard extends StatelessWidget {
   final File? selectedImageFile;
@@ -141,34 +143,49 @@ class ImageUploadCard extends StatelessWidget {
           Stack(
             children: [
               if (isPdf)
-                Container(
-                  height: 120,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceLight.withAlpha(50),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primary.withAlpha(60)),
+                InkWell(
+                  onTap: () => PdfViewerDialog.show(
+                    context,
+                    localFilePath: selectedImageFile!.path,
+                    title: 'Comprobante SIAT (PDF)',
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.picture_as_pdf_rounded, size: 48, color: AppColors.expense),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          selectedImageFile!.path.split(Platform.pathSeparator).last,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    height: 120,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight.withAlpha(50),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withAlpha(60)),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.picture_as_pdf_rounded, size: 44, color: AppColors.expense),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            selectedImageFile!.path.split(Platform.pathSeparator).last,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Factura Electrónica SIAT (PDF)',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.visibility_rounded, size: 14, color: AppColors.primary),
+                            SizedBox(width: 4),
+                            Text(
+                              'Toca para ver / abrir documento PDF',
+                              style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 )
               else
@@ -181,6 +198,7 @@ class ImageUploadCard extends StatelessWidget {
                     fit: BoxFit.cover,
                   ),
                 ),
+
               Positioned(
                 top: 8,
                 right: 8,

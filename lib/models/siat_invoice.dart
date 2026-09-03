@@ -1,3 +1,5 @@
+import 'financial_record.dart';
+
 class SiatInvoice {
   final String nit;
   final String cuf;
@@ -13,6 +15,7 @@ class SiatInvoice {
   final String? controlCode;
   final String? downloadedPdfPath;
   final String? readableNotes;
+  final List<InvoiceItem> items;
 
   SiatInvoice({
     required this.nit,
@@ -29,6 +32,7 @@ class SiatInvoice {
     this.controlCode,
     this.downloadedPdfPath,
     this.readableNotes,
+    this.items = const [],
   });
 
   SiatInvoice copyWith({
@@ -46,6 +50,7 @@ class SiatInvoice {
     String? controlCode,
     String? downloadedPdfPath,
     String? readableNotes,
+    List<InvoiceItem>? items,
   }) {
     return SiatInvoice(
       nit: nit ?? this.nit,
@@ -62,6 +67,7 @@ class SiatInvoice {
       controlCode: controlCode ?? this.controlCode,
       downloadedPdfPath: downloadedPdfPath ?? this.downloadedPdfPath,
       readableNotes: readableNotes ?? this.readableNotes,
+      items: items ?? this.items,
     );
   }
 
@@ -81,6 +87,7 @@ class SiatInvoice {
       'controlCode': controlCode,
       'downloadedPdfPath': downloadedPdfPath,
       'readableNotes': readableNotes,
+      'items': items.map((i) => i.toMap()).toList(),
     };
   }
 }
