@@ -59,6 +59,7 @@ class FinancialRecord {
   final DateTime createdAt;
   final String registeredBy;
   final String memberId;
+  final String paymentMethod; // 'cash', 'qr', 'card', 'transfer'
   final List<InvoiceItem>? items;
 
   // Campos de Auditoría & Eliminación Lógica
@@ -77,6 +78,7 @@ class FinancialRecord {
     this.exchangeRate = 6.96,
     required this.type,
     required this.category,
+    this.paymentMethod = 'cash',
     this.imageUrl,
     this.storagePath,
     required this.date,
@@ -93,6 +95,20 @@ class FinancialRecord {
   bool get isIncome => type == RecordType.income;
   bool get isExpense => type == RecordType.expense;
 
+  String get paymentMethodLabel {
+    switch (paymentMethod) {
+      case 'qr':
+        return 'QR / Transferencia';
+      case 'card':
+        return 'Tarjeta';
+      case 'transfer':
+        return 'Transferencia';
+      case 'cash':
+      default:
+        return 'Efectivo';
+    }
+  }
+
   FinancialRecord copyWith({
     String? id,
     String? title,
@@ -103,6 +119,7 @@ class FinancialRecord {
     double? exchangeRate,
     RecordType? type,
     String? category,
+    String? paymentMethod,
     String? imageUrl,
     String? storagePath,
     DateTime? date,
@@ -125,6 +142,7 @@ class FinancialRecord {
       exchangeRate: exchangeRate ?? this.exchangeRate,
       type: type ?? this.type,
       category: category ?? this.category,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       imageUrl: imageUrl ?? this.imageUrl,
       storagePath: storagePath ?? this.storagePath,
       date: date ?? this.date,
@@ -149,6 +167,7 @@ class FinancialRecord {
       'exchangeRate': exchangeRate,
       'type': type.key,
       'category': category,
+      'paymentMethod': paymentMethod,
       'imageUrl': imageUrl,
       'storagePath': storagePath,
       'date': Timestamp.fromDate(date),
@@ -184,6 +203,7 @@ class FinancialRecord {
       exchangeRate: (data['exchangeRate'] as num?)?.toDouble() ?? 6.96,
       type: RecordType.fromString(data['type'] as String? ?? 'expense'),
       category: data['category'] as String? ?? 'otros_gastos',
+      paymentMethod: data['paymentMethod'] as String? ?? 'cash',
       imageUrl: data['imageUrl'] as String?,
       storagePath: data['storagePath'] as String?,
       date: (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),

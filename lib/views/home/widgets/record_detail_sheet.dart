@@ -159,11 +159,21 @@ class RecordDetailSheet extends StatelessWidget {
                   const SizedBox(height: 14),
 
 
-                  // 2. Metadatos de Auditoría (Fecha y Miembro)
+                  // 2. Metadatos de Auditoría (Fecha, Método de Pago y Miembro)
                   _buildDetailRow(
                     icon: Icons.calendar_today_outlined,
                     label: 'Fecha y Hora',
                     value: DateFormatter.formatFull(record.date),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDetailRow(
+                    icon: record.paymentMethod == 'qr'
+                        ? Icons.qr_code_rounded
+                        : (record.paymentMethod == 'card'
+                            ? Icons.credit_card_rounded
+                            : Icons.payments_outlined),
+                    label: 'Método de Pago',
+                    value: record.paymentMethodLabel,
                   ),
                   const SizedBox(height: 12),
                   Row(

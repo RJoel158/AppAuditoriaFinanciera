@@ -50,6 +50,9 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
   String _selectedCurrency = 'BOB';
   double _exchangeRate = ExchangeRateService.fallbackRate; // 10.50
 
+  // Método de Pago: 'cash' (Efectivo), 'qr' (QR / Transferencia), 'card' (Tarjeta)
+  String _selectedPaymentMethod = 'cash';
+
   File? _selectedImage;
   CompressionResult? _compressionResult;
   bool _isCompressing = false;
@@ -337,6 +340,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
         exchangeRate: _exchangeRate,
         type: _selectedType,
         category: _selectedCategory,
+        paymentMethod: _selectedPaymentMethod,
         imageUrl: imageUrl,
         storagePath: storagePath,
         date: _selectedDate,
@@ -401,62 +405,6 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
-                // Banner Destacado: Escanear Factura QR (SIAT Bolivia)
-                InkWell(
-                  onTap: _isSaving ? null : _scanSiatQrInvoice,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF0C2419), Color(0xFF133624)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.primary.withAlpha(90)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withAlpha(30),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 24),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Escanear Factura QR (SIAT Bolivia)',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13.5,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Autocompleta monto, comercio, NIT y adjunta comprobante',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primary),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
                 // 1. Selector de Tipo (Ingreso / Egreso)
                 TransactionTypeToggle(
                   selectedType: _selectedType,
@@ -595,6 +543,11 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                     ),
                   ),
                 ],
+
+                const SizedBox(height: 16),
+
+                // Selector Compacto de Método de Pago (Efectivo / QR / Tarjeta)
+                _buildPaymentMethodSelector(),
 
                 const SizedBox(height: 16),
 
@@ -853,6 +806,86 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPaymentMethodSelector() {
+    final methods = [
+      {'id': 'cash', 'label': 'Efectivo', 'icon': Icons.payments_outlined},
+      {'id': 'qr', 'label': 'QR / Transf.', 'icon': Icons.qr_code_rounded},
+      {'id': 'card', 'label': 'Tarjeta', 'icon': Icons.credit_card_rounded},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Método de Pago',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: methods.map((m) {
+            final isSelected = _selectedPaymentMethod == m['id'];
+            final icon = m['icon'] as IconData;
+            final label = m['label'] as String;
+            final id = m['id'] as String;
+
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: InkWell(
+                  onTap: _isSaving ? null : () => setState(() => _selectedPaymentMethod = id),
+                  borderRadius: BorderRadius.circular(10),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primary.withAlpha(35)
+                          : AppColors.surfaceLight.withAlpha(60),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.border.withAlpha(60),
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 15,
+                          color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 11.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
