@@ -19,7 +19,6 @@ class NotificationService {
 
   bool _isInitialized = false;
   StreamSubscription<List<FinancialRecord>>? _recordsSubscription;
-  DateTime _listenerStartTime = DateTime.now();
   final Set<String> _notifiedRecordIds = {};
 
   static const String _channelId = 'famfinance_records_channel';
@@ -72,33 +71,48 @@ class NotificationService {
     debugPrint('🔔 [NotificationService] Inicializado correctamente');
   }
 
-  /// Escucha movimientos en tiempo real en Firestore creados por otros familiares
+  bool _isFirstStreamBatch = true;
+
+  /// Escucha movimientos en tiempo real en Firestore creados por cualquier miembro de la familia
   void startFamilyListener({
-    required String currentUserId,
+    String currentUserId = '',
     String? currentUserAlias,
     String? currentUserDisplayName,
   }) {
     _recordsSubscription?.cancel();
-    _listenerStartTime = DateTime.now().subtract(const Duration(seconds: 3));
+    _isFirstStreamBatch = true;
 
-    _recordsSubscription = _firestoreService.getRecordsStream(limit: 10).listen(
+    _recordsSubscription = _firestoreService.getRecordsStream(limit: 15).listen(
       (records) {
-        for (final record in records) {
-          final regBy = record.registeredBy.toLowerCase();
-          final isSelf = record.memberId == currentUserId ||
-              (currentUserAlias != null && currentUserAlias.isNotEmpty && regBy.contains(currentUserAlias.toLowerCase())) ||
-              (currentUserDisplayName != null && currentUserDisplayName.isNotEmpty && regBy.contains(currentUserDisplayName.toLowerCase()));
+        if (_isFirstStreamBatch) {
+          // Semilla inicial: registramos todos los IDs existentes para no disparar notificaciones de registros pasados
+          for (final record in records) {
+            final dedupeKey = record.id.isNotEmpty
+                ? record.id
+                : '${record.amount}_${record.category}_${record.date.millisecondsSinceEpoch}';
+            _notifiedRecordIds.add(dedupeKey);
+          }
+          _isFirstStreamBatch = false;
+          debugPrint('🔔 [NotificationService] Base inicial de registros memorizada (${records.length} elementos).');
+          return;
+        }
 
+        // Nuevos registros creados en tiempo real
+        for (final record in records) {
           final dedupeKey = record.id.isNotEmpty
               ? record.id
               : '${record.amount}_${record.category}_${record.date.millisecondsSinceEpoch}';
 
-          // Solo notificar si fue creado por OTRO miembro y no se ha notificado antes
-          if (record.createdAt.isAfter(_listenerStartTime) &&
-              !isSelf &&
-              !_notifiedRecordIds.contains(dedupeKey)) {
+          if (!_notifiedRecordIds.contains(dedupeKey)) {
             _notifiedRecordIds.add(dedupeKey);
-            showRecordNotification(record: record, isSelf: false);
+
+            final regBy = record.registeredBy.toLowerCase();
+            final isSelf = (currentUserId.isNotEmpty && record.memberId == currentUserId) ||
+                (currentUserAlias != null && currentUserAlias.isNotEmpty && regBy.contains(currentUserAlias.toLowerCase())) ||
+                (currentUserDisplayName != null && currentUserDisplayName.isNotEmpty && regBy.contains(currentUserDisplayName.toLowerCase()));
+
+            // Se notifica a TODOS los miembros (tanto administradores como familiares)
+            showRecordNotification(record: record, isSelf: isSelf);
           }
         }
       },
